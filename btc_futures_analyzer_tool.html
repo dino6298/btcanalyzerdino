@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crypto Futures Analyzer by dino98</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    .section-title{letter-spacing:-0.01em}
+    .tip{position:relative;display:inline-flex;align-items:center;gap:.25rem;cursor:help}
+    .tip::after{content:attr(data-tip);position:absolute;left:0;bottom:calc(100% + 8px);z-index:80;width:max-content;max-width:260px;padding:.55rem .7rem;border:1px solid #334155;border-radius:.75rem;background:#020617;color:#cbd5e1;font-size:.72rem;line-height:1.25;box-shadow:0 16px 40px rgba(2,6,23,.45);opacity:0;pointer-events:none;transform:translateY(4px);transition:opacity .15s ease,transform .15s ease;white-space:normal}
+    .tip:hover::after{opacity:1;transform:translateY(0)}
+    .tip-icon{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:999px;border:1px solid #475569;color:#94a3b8;font-size:10px;line-height:1}
+    .tip-right::after{left:auto;right:0}
+    .panel-soft{box-shadow:0 18px 50px rgba(2,6,23,.28)}
+    @media (min-width:1280px){
+      main.dashboard-shell{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:1rem;align-items:start}
+      main.dashboard-shell>header,#stickyTradeBar,#controlsPanel,#cockpit,#noTradeBox,#signalBreakdownPanel{grid-column:1/-1}
+      #quickMetricsPanel{grid-column:1/7}
+      #phase2Panel{grid-column:7/13}
+      #structurePanel{grid-column:1/9}
+      #phase3Panel{grid-column:9/13}
+      #riskGuardBox{grid-column:1/-1}
+      #heatmapPanel{grid-column:1/6}
+      #backtestPanel{grid-column:6/13}
+      main.dashboard-shell>footer{grid-column:1/-1}
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen overflow-x-hidden">
+  <main class="dashboard-shell w-full max-w-none mx-auto p-3 sm:p-4 lg:p-5 2xl:p-6">
+    <header class="mb-4 flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+      <div>
+        <h1 class="text-2xl md:text-4xl font-bold tracking-tight">Crypto Futures Analyzer</h1>
+        <p class="text-slate-400 mt-2">Top 10 USDT Futures · Structure · Momentum · Backtest · Risk Guard · dino98</p>
+      </div>
+      <div class="text-right">
+        <div class="text-xs uppercase tracking-[0.3em] text-slate-500">Created by</div>
+        <div class="text-2xl font-black text-cyan-400">dino98</div>
+      </div>
+    </header>
+
+    <section id="stickyTradeBar" class="sticky top-0 z-50 mb-4 -mx-3 sm:-mx-4 lg:-mx-5 2xl:-mx-6 px-3 sm:px-4 lg:px-5 2xl:px-6 py-2 bg-slate-950/90 backdrop-blur-xl border-y border-slate-800 shadow-lg">
+      <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
+        <div class="sm:col-span-5 xl:col-span-4">
+          <label class="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Symbol</label>
+          <select id="stickySymbol" class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-cyan-400"><option>Đang tải...</option></select>
+        </div>
+        <div class="sm:col-span-4 xl:col-span-3 grid grid-cols-2 gap-2">
+          <button id="stickyAnalyzeBtn" class="rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-3 py-2">Phân tích</button>
+          <button id="stickyAutoBtn" class="rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-2">Auto ON</button>
+        </div>
+        <div class="sm:col-span-3 xl:col-span-5 flex flex-wrap sm:justify-end gap-2 text-xs text-slate-400">
+          <span id="stickySignalMini" class="rounded-full bg-slate-900 border border-slate-700 px-3 py-2 text-slate-300">WAIT · 0</span>
+          <span id="stickyCountdown" class="rounded-full bg-slate-900 border border-slate-700 px-3 py-2">Realtime OFF</span>
+          
+          <button id="toggleChartBtn" class="rounded-full bg-slate-900 hover:bg-slate-800 border border-slate-700 px-3 py-2 text-slate-300">Hide Chart</button>
+          <button id="clearCacheBtn" title="Click: clear runtime cache · Shift+Click: hard reset" class="rounded-full bg-amber-950/70 hover:bg-amber-900 border border-amber-700 px-3 py-2 text-amber-200">🧹 Clear Cache</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="controlsPanel" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 gap-3 mb-4">
+      <div class="bg-slate-900 rounded-2xl p-3 border border-slate-800 sm:col-span-2 xl:col-span-3">
+        <label class="block text-sm text-slate-400 mb-1">Symbol - Top 10 Volume 24h</label>
+        <select id="symbol" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 outline-none focus:border-cyan-400"><option>Đang tải...</option></select>
+        <div id="symbolMeta" class="text-xs text-slate-500 mt-2">Lấy từ Binance Futures 24h ticker</div>
+      </div>
+      <div class="bg-slate-900 rounded-2xl p-3 border border-slate-800 xl:col-span-2">
+        <label class="block text-sm text-slate-400 mb-1">Timeframe</label>
+        <select id="interval" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 outline-none focus:border-cyan-400">
+          <option value="5m">5m</option><option value="15m" selected>15m</option><option value="30m">30m</option><option value="1h">1H</option>
+        </select>
+      </div>
+      <div class="bg-slate-900 rounded-2xl p-3 border border-slate-800 sm:col-span-2 xl:col-span-3">
+        <label class="block text-sm text-slate-400 mb-1">Strategy</label>
+        <select id="strategy" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 outline-none focus:border-cyan-400">
+          <option value="momentum" selected>Momentum Scalping</option>
+          <option value="trend">Conservative Trend</option>
+          <option value="reversal">Aggressive Reversal</option>
+        </select>
+      </div>
+      <div class="bg-slate-900 rounded-2xl p-3 border border-slate-800 xl:col-span-1">
+        <label class="block text-sm text-slate-400 mb-1">R:R</label>
+        <select id="rr" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 outline-none focus:border-cyan-400">
+          <option value="0.8">1 : 0.8</option><option value="1" selected>1 : 1</option><option value="1.2">1 : 1.2</option><option value="2">1 : 2</option>
+        </select>
+      </div>
+      <div class="bg-slate-900 rounded-2xl p-3 border border-slate-800 xl:col-span-2">
+        <label class="block text-sm text-slate-400 mb-1">Sensitivity</label>
+        <select id="sensitivity" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 outline-none focus:border-cyan-400">
+          <option value="conservative">Conservative</option>
+          <option value="balanced" selected>Balanced</option>
+          <option value="aggressive">Aggressive</option>
+        </select>
+      </div>
+      <div class="bg-slate-900 rounded-2xl p-3 border border-slate-800 sm:col-span-2 xl:col-span-1">
+        <label class="block text-sm text-slate-400 mb-1">Filters</label>
+        <label class="flex items-center gap-2 text-sm"><input id="mtfFilter" type="checkbox" checked class="accent-cyan-400"> MTF</label>
+        <label class="flex items-center gap-2 text-sm mt-1"><input id="sessionFilter" type="checkbox" class="accent-cyan-400"> Session</label>
+      </div>
+    </section>
+
+    <section id="cockpit" class="grid grid-cols-1 xl:grid-cols-12 gap-3 mb-4 items-start">
+      <div id="chartPanel" class="xl:col-span-4 2xl:col-span-4 bg-slate-900 rounded-2xl p-3 border border-slate-800 shadow-lg transition-all duration-300">
+        <div class="flex items-center justify-between mb-3 gap-3">
+          <div class="flex items-center gap-2"><h2 class="font-semibold text-lg">Chart</h2><span class="text-[10px] px-2 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-400">LIVE</span></div>
+          <span id="lastUpdate" class="text-sm text-slate-400">-</span>
+        </div>
+        <div class="flex flex-wrap gap-3 text-xs mb-3">
+          <span class="inline-flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-emerald-400"></span>Nến tăng</span>
+          <span class="inline-flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-rose-400"></span>Nến giảm</span>
+          <span class="inline-flex items-center gap-2"><span class="w-8 h-1 rounded-full bg-cyan-400"></span>Fast EMA</span>
+          <span class="inline-flex items-center gap-2"><span class="w-8 h-1 rounded-full bg-amber-400"></span>Slow EMA</span>
+        </div>
+        <div class="relative overflow-hidden rounded-2xl">
+          <div id="chart" class="w-full h-[260px] sm:h-[320px] xl:h-[38vh] 2xl:h-[42vh] min-h-[240px]"></div>
+          <div class="pointer-events-none absolute inset-0 flex items-center justify-center"><div class="text-[56px] sm:text-[72px] md:text-[104px] 2xl:text-[132px] font-black text-slate-700/20 rotate-[-18deg] select-none">dino98</div></div>
+        </div>
+      </div>
+
+      <div id="signalPanel" class="xl:col-span-8 2xl:col-span-8 bg-slate-900 rounded-2xl p-3 border border-slate-800 shadow-lg transition-all duration-300">
+        <div class="flex items-center justify-between gap-3 mb-3">
+          <h2 class="font-semibold text-lg">Tín hiệu & Kế hoạch lệnh</h2>
+          <div class="text-xs text-slate-500">HTML-only · Đặt lệnh thủ công</div>
+        </div>
+        <div class="grid grid-cols-1 2xl:grid-cols-12 gap-3">
+          <div class="2xl:col-span-4">
+            <div id="signalBox" class="rounded-2xl p-3 bg-slate-950 border border-slate-800 mb-3">
+              <div class="flex items-center justify-between"><div id="signal" class="text-2xl 2xl:text-3xl font-black">WAIT</div><div id="score" class="text-xl 2xl:text-2xl font-black text-slate-400">0</div></div>
+              <p id="reason" class="text-slate-400 mt-2 text-sm">Nhấn Analyze để bắt đầu.</p>
+            </div>
+            <div class="grid grid-cols-1 gap-2 text-xs">
+              <button id="analyzeBtn" class="rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-3 py-2">Phân tích</button>
+              <button id="autoBtn" class="rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-2">Auto ON</button>
+              <div id="countdown" class="rounded-xl bg-slate-950 border border-slate-800 p-2 text-slate-400">Realtime OFF</div>
+            </div>
+          </div>
+          <div class="2xl:col-span-8">
+            <div class="grid grid-cols-2 sm:grid-cols-4 2xl:grid-cols-6 gap-2 text-sm mb-3">
+              <div class="bg-slate-950 rounded-xl p-3 border border-slate-800"><div class="text-slate-500 tip" data-tip="Giá vào lệnh đề xuất. Với lệnh limit, đây là giá cần chờ khớp, không phải lúc nào cũng vào ngay.">Giá vào <span class="tip-icon">i</span></div><div id="entry" class="font-bold text-lg">-</div></div>
+              <div class="bg-slate-950 rounded-xl p-3 border border-slate-800"><div class="text-slate-500 tip" data-tip="Stop Loss: giá cắt lỗ khi setup mất hiệu lực.">SL (Cắt lỗ) <span class="tip-icon">i</span></div><div id="sl" class="font-bold text-lg">-</div></div>
+              <div class="bg-slate-950 rounded-xl p-3 border border-slate-800"><div class="text-slate-500 tip" data-tip="Take Profit 1: vùng chốt lời một phần, thường dùng để giảm rủi ro hoặc dời SL về hòa vốn.">TP1 <span class="tip-icon">i</span></div><div id="tp1" class="font-bold text-lg">-</div></div>
+              <div class="bg-slate-950 rounded-xl p-3 border border-slate-800"><div class="text-slate-500 tip" data-tip="Take Profit 2: mục tiêu chính hoặc mục tiêu xa hơn của kế hoạch lệnh.">TP2 <span class="tip-icon">i</span></div><div id="tp2" class="font-bold text-lg">-</div></div>
+              <div class="bg-slate-950 rounded-xl p-3 border border-slate-800"><div class="text-slate-500 tip" data-tip="Mục tiêu chốt lời cuối cùng, thường trùng TP2 hoặc target theo thanh khoản.">TP cuối <span class="tip-icon">i</span></div><div id="tp" class="font-bold text-lg">-</div></div>
+              <div class="bg-slate-950 rounded-xl p-3 border border-slate-800"><div class="text-slate-500 tip" data-tip="Tỷ lệ lợi nhuận/rủi ro cuối cùng. Ví dụ 1:2 nghĩa là lời kỳ vọng gấp 2 lần mức lỗ.">R:R cuối <span class="tip-icon">i</span></div><div id="rrOut" class="font-bold text-lg">-</div></div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-5 gap-2 text-xs mb-3">
+              <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500 tip" data-tip="Cho biết trạng thái thực thi của setup: đang chờ khớp, đã khớp, đã bỏ lỡ, đã TP hoặc đã mất hiệu lực.">Trạng thái khớp <span class="tip-icon">i</span></div><div id="executionStatus" class="font-bold text-slate-200 mt-1">-</div></div>
+              <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500 tip" data-tip="Kiểu vào lệnh: market xác nhận, chờ pullback, retest EMA, hoặc hồi về FVG.">Kiểu vào lệnh <span class="tip-icon">i</span></div><div id="entryType" class="font-semibold text-slate-200 mt-1">-</div></div>
+              <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500 tip" data-tip="Khoảng rủi ro trên mỗi coin/token, tính từ Entry đến SL.">Rủi ro / coin <span class="tip-icon">i</span></div><div id="riskPerCoin" class="font-semibold text-slate-200 mt-1">-</div></div>
+              <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500 tip" data-tip="Khoảng cách từ giá hiện tại tới Entry. Nếu quá xa, tránh FOMO hoặc đuổi giá.">Gần Entry <span class="tip-icon">i</span></div><div id="entryProximity" class="font-semibold text-slate-200 mt-1">-</div></div>
+              <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500 tip" data-tip="Ghi chú ngắn giải thích vì sao tool chọn kiểu entry này và trạng thái hiện tại của setup.">Ghi chú <span class="tip-icon">i</span></div><div id="planNote" class="font-semibold text-slate-200 mt-1 truncate" title="-">-</div></div>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs mb-3">
+              <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500 tip" data-tip="Thời điểm tín hiệu/kế hoạch lệnh được tạo ra. Dùng để biết signal còn mới hay đã cũ.">Thời điểm tín hiệu <span class="tip-icon">i</span></div><div id="signalTimeOut" class="font-semibold text-slate-200 mt-1">-</div></div>
+              <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500 tip" data-tip="Giá thị trường tại lúc tín hiệu được tạo. Không bị cập nhật lại bởi giá realtime.">Giá lúc tín hiệu <span class="tip-icon">i</span></div><div id="signalPriceOut" class="font-semibold text-slate-200 mt-1">-</div></div>
+              <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500 tip" data-tip="Giá hiện tại theo realtime. So sánh với Signal Price và Entry để biết có bỏ lỡ không.">Giá hiện tại <span class="tip-icon">i</span></div><div id="currentPriceOut" class="font-semibold text-slate-200 mt-1">-</div></div>
+              <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500 tip" data-tip="Thời gian đã trôi qua từ lúc tín hiệu xuất hiện. Signal càng cũ thì càng cần cẩn thận.">Từ lúc tín hiệu <span class="tip-icon">i</span></div><div id="sinceSignalOut" class="font-semibold text-slate-200 mt-1">-</div></div>
+              <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500 tip" data-tip="Cho biết giá hiện tại đang hồi về Entry, đã chạm Entry, hay đã đi qua Entry về phía TP/SL.">Đường đi tới Entry <span class="tip-icon">i</span></div><div id="entryPathOut" class="font-semibold text-slate-200 mt-1">-</div></div>
+            </div>
+            <div class="bg-slate-950 rounded-2xl p-3 border border-slate-800">
+              <div class="flex items-center justify-between mb-2"><h3 class="font-semibold">Tính khối lượng lệnh</h3><div class="text-xs text-slate-500">Rủi ro / ký quỹ / khối lượng</div></div>
+              <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-2">
+                <div><label class="text-xs text-slate-500 tip" data-tip="Tổng vốn bạn muốn dùng để tính risk. Không nhất thiết là toàn bộ số dư tài khoản.">Vốn USDT <span class="tip-icon">i</span></label><input id="accountSize" type="number" value="20" class="w-full mt-1 rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 outline-none focus:border-cyan-400"></div>
+                <div><label class="text-xs text-slate-500 tip" data-tip="Phần trăm vốn chấp nhận mất nếu lệnh chạm SL. Nên giữ thấp, thường 1–3%.">Risk % <span class="tip-icon">i</span></label><input id="riskPct" type="number" value="3" step="0.5" class="w-full mt-1 rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 outline-none focus:border-cyan-400"></div>
+                <div><label class="text-xs text-slate-500 tip" data-tip="Đòn bẩy futures. Đòn bẩy cao làm margin nhỏ hơn nhưng nguy cơ thanh lý cao hơn.">Đòn bẩy <span class="tip-icon">i</span></label><select id="leverage" class="w-full mt-1 rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 outline-none focus:border-cyan-400"><option value="3">x3</option><option value="5" selected>x5</option><option value="8">x8</option><option value="10">x10</option><option value="15">x15</option><option value="20">x20</option></select></div>
+                <div><label class="text-xs text-slate-500 tip" data-tip="Chọn Auto Risk% để tool tự tính khối lượng theo SL, hoặc chọn margin cố định.">Vốn vào lệnh <span class="tip-icon">i</span></label><select id="tradeMargin" class="w-full mt-1 rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 outline-none focus:border-cyan-400"><option value="auto" selected>Auto Risk%</option><option value="3">3 USDT</option><option value="5">5 USDT</option><option value="10">10 USDT</option><option value="20">20 USDT</option><option value="50">50 USDT</option><option value="100">100 USDT</option></select></div>
+                <div><label class="text-xs text-slate-500 tip" data-tip="Số USDT ký quỹ ước tính cần dùng cho vị thế này.">Margin dùng <span class="tip-icon">i</span></label><div id="suggestedMargin" class="mt-1 rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 font-bold">-</div></div>
+              </div>
+              <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2 text-sm mb-2">
+                <div class="rounded-xl bg-slate-900 border border-slate-800 p-2"><div class="text-slate-500 tip" data-tip="Số USDT ước tính sẽ mất nếu lệnh chạm SL.">Risk thực tế <span class="tip-icon">i</span></div><div id="riskUsdt" class="font-bold">-</div></div>
+                <div class="rounded-xl bg-slate-900 border border-slate-800 p-2"><div class="text-slate-500 tip" data-tip="Risk thực tế so với vốn nhập ở trên, đã tính adaptive risk nếu có.">Risk % thực tế <span class="tip-icon">i</span></div><div id="actualRiskPct" class="font-bold">-</div></div>
+                <div class="rounded-xl bg-slate-900 border border-slate-800 p-2"><div class="text-slate-500 tip" data-tip="Giá trị danh nghĩa của vị thế sau khi tính leverage.">Vị thế <span class="tip-icon">i</span></div><div id="positionSize" class="font-bold">-</div></div>
+                <div class="rounded-xl bg-slate-900 border border-slate-800 p-2"><div class="text-slate-500 tip" data-tip="Số lượng coin/token ước tính tương ứng với vị thế.">Số lượng coin <span class="tip-icon">i</span></div><div id="qtyCoin" class="font-bold">-</div></div>
+                <div class="rounded-xl bg-slate-900 border border-slate-800 p-2"><div class="text-slate-500 tip" data-tip="Khoảng cách phần trăm từ Entry đến SL. SL quá gần dễ bị quét, quá xa làm risk lớn.">Khoảng cách SL <span class="tip-icon">i</span></div><div id="slDistance" class="font-bold">-</div></div>
+                <div class="rounded-xl bg-slate-900 border border-slate-800 p-2"><div class="text-slate-500 tip" data-tip="Chế độ tính khối lượng: Auto Risk, Auto Risk Adaptive hoặc Fixed Margin.">Chế độ sizing <span class="tip-icon">i</span></div><div id="sizingMode" class="font-bold">-</div></div>
+              </div>
+              <div class="grid grid-cols-3 gap-2"><button id="copyPlanBtn" class="rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-3 py-2">Copy kế hoạch</button><button id="copyPricesBtn" class="rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-2">Copy giá</button><button id="openBinanceBtn" class="rounded-xl bg-yellow-500 hover:bg-yellow-400 text-slate-950 font-bold px-3 py-2">Mở Binance</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="noTradeBox" class="hidden bg-amber-950/60 rounded-2xl p-3 border border-amber-700 shadow-lg mb-4"><div class="flex items-center justify-between mb-2"><h3 class="font-semibold text-base text-amber-200">No-Trade Warning</h3><div class="text-xs text-amber-300">Tool đang chặn lệnh</div></div><div id="noTradeReasons" class="flex flex-wrap gap-2 text-xs"></div></section>
+
+    <section id="signalBreakdownPanel" class="bg-slate-900 rounded-2xl p-3 border border-slate-800 shadow-lg mb-4 panel-soft"><div class="flex items-center justify-between mb-2"><h3 class="section-title font-semibold text-base text-slate-200">Signal Breakdown</h3><div class="text-xs text-slate-500">Scoring Components</div></div><div id="scoreDetail" class="grid grid-rows-2 grid-flow-col auto-cols-fr gap-2 text-xs overflow-x-auto pb-1"></div></section>
+
+    <section id="quickMetricsPanel" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 xl:grid-cols-4 2xl:grid-cols-7 gap-2 mb-4">
+      <div class="bg-slate-900 rounded-2xl p-3 border border-slate-800"><div class="text-slate-500 text-sm">Price</div><div id="price" class="text-xl font-bold">-</div></div><div class="bg-slate-900 rounded-2xl p-3 border border-slate-800"><div class="text-slate-500 text-sm">Fast EMA</div><div id="emaFast" class="text-xl font-bold text-cyan-300">-</div></div><div class="bg-slate-900 rounded-2xl p-3 border border-slate-800"><div class="text-slate-500 text-sm">Slow EMA</div><div id="emaSlow" class="text-xl font-bold text-amber-300">-</div></div><div class="bg-slate-900 rounded-2xl p-3 border border-slate-800"><div class="text-slate-500 text-sm">RSI</div><div id="rsi" class="text-xl font-bold">-</div></div><div class="bg-slate-900 rounded-2xl p-3 border border-slate-800"><div class="text-slate-500 text-sm">ATR</div><div id="atr" class="text-xl font-bold">-</div></div><div class="bg-slate-900 rounded-2xl p-3 border border-slate-800"><div class="text-slate-500 text-sm">Volatility</div><div id="volatility" class="text-xl font-bold">-</div></div><div class="bg-slate-900 rounded-2xl p-3 border border-slate-800"><div class="text-slate-500 text-sm">Sweep</div><div id="sweep" class="text-xl font-bold">-</div></div>
+    </section>
+
+    <section id="phase2Panel" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-2 mb-4"><div class="bg-slate-900 rounded-2xl p-3 border border-slate-800"><div class="text-slate-500 text-sm">Market Regime</div><div id="regime" class="text-xl font-bold">-</div></div><div class="bg-slate-900 rounded-2xl p-3 border border-slate-800"><div class="text-slate-500 text-sm">MTF Alignment</div><div id="mtfBias" class="text-xl font-bold">-</div><div id="mtfDetail" class="text-xs text-slate-500 mt-1">-</div></div><div class="bg-slate-900 rounded-2xl p-3 border border-slate-800"><div class="text-slate-500 text-sm">Kill Zone</div><div id="killZoneOut" class="text-xl font-bold">-</div><div id="sessionVN" class="text-xs text-slate-500 mt-1">-</div></div><div class="bg-slate-900 rounded-2xl p-3 border border-slate-800"><div class="text-slate-500 text-sm">Session Vol</div><div id="sessionVolOut" class="text-xl font-bold">-</div><div id="sessionVolNote" class="text-xs text-slate-500 mt-1">-</div></div><div class="bg-slate-900 rounded-2xl p-3 border border-slate-800"><div class="text-slate-500 text-sm">Adaptive Risk</div><div id="adaptiveRiskOut" class="text-xl font-bold">-</div><div class="text-xs text-slate-500 mt-1">risk multiplier</div></div><div class="bg-slate-900 rounded-2xl p-3 border border-slate-800"><div class="text-slate-500 text-sm">Confidence</div><div class="mt-2 h-3 rounded-full bg-slate-800 overflow-hidden"><div id="confidenceBar" class="h-full bg-cyan-400" style="width:0%"></div></div><div id="confidenceText" class="text-sm mt-2 text-slate-400">-</div></div></section>
+
+    <section id="structurePanel" class="bg-slate-900 rounded-2xl p-3 border border-slate-800 shadow-lg mb-4 panel-soft"><div class="flex items-center justify-between mb-3"><h3 class="section-title font-semibold text-base text-slate-200">Market Structure</h3><div class="text-xs text-slate-500">BOS · CHOCH · Premium/Discount</div></div><div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-9 gap-2 text-sm"><div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500">Bias</div><div id="structureBias" class="font-bold text-lg">-</div></div><div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500">BOS</div><div id="bosOut" class="font-bold text-lg">-</div></div><div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500">CHOCH</div><div id="chochOut" class="font-bold text-lg">-</div></div><div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500">Zone</div><div id="zoneOut" class="font-bold text-lg">-</div></div><div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500">ATR %</div><div id="atrPctOut" class="font-bold text-lg">-</div></div><div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500">Entry Logic</div><div id="entryLogicOut" class="font-bold text-sm mt-1">-</div></div><div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500">Setup</div><div id="setupTypeOut" class="font-bold text-sm mt-1">-</div></div><div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500">Rank / FVG</div><div id="rankFvgOut" class="font-bold text-sm mt-1">-</div></div><div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500">Market State</div><div id="marketStateOut" class="font-bold text-sm mt-1">-</div></div></div></section>
+
+    <section id="phase3Panel" class="bg-slate-900 rounded-2xl p-3 border border-slate-800 shadow-lg mb-4 panel-soft">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="section-title font-semibold text-base text-slate-200">Adaptive Intelligence</h3>
+        <button id="clearSetupLogBtn" class="rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 text-xs text-slate-300">Clear Log</button>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 text-sm mb-3">
+        <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500">Quality Score</div><div id="qualityScoreOut" class="font-bold text-lg">-</div></div>
+        <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500">Confidence Decay</div><div id="confidenceDecayOut" class="font-bold text-lg">-</div></div>
+        <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500">Signal Age</div><div id="signalAgeOut" class="font-bold text-lg">-</div></div>
+        <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500">Dynamic TP</div><div id="dynamicTpOut" class="font-bold text-sm mt-1">-</div></div>
+        <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500">Setup Memory</div><div id="setupMemoryOut" class="font-bold text-lg">-</div></div>
+        <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><div class="text-slate-500">Quality Rank</div><div id="qualityRankOut" class="font-bold text-lg">-</div></div>
+      </div>
+      <div class="max-h-[320px] overflow-y-auto overflow-x-auto rounded-xl border border-slate-800">
+        <table class="w-full text-xs">
+          <thead class="text-slate-500"><tr><th class="text-left p-2">Time</th><th class="text-left p-2">Symbol</th><th class="text-left p-2">Signal</th><th class="text-left p-2">Setup</th><th class="text-left p-2">Rank</th><th class="text-left p-2">Q.Score</th></tr></thead>
+          <tbody id="setupReplayBody"><tr><td colspan="6" class="p-3 text-slate-500 text-center">Chưa có setup log.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="riskGuardBox" class="bg-slate-900 rounded-2xl p-3 border border-slate-800 shadow-lg mb-4 panel-soft"><div class="flex items-center justify-between mb-2"><h3 class="font-semibold text-base text-slate-200">Risk Guard</h3><div id="riskGuardStatus" class="text-xs rounded-full px-3 py-1 bg-slate-800 border border-slate-700 text-slate-300">-</div></div><div id="riskGuardList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs"></div></section>
+
+    <section id="heatmapPanel" class="bg-slate-900 rounded-2xl p-3 border border-slate-800 shadow-lg mb-4 panel-soft"><div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3"><div><h2 class="section-title font-semibold text-lg">Trade Opportunity Scanner</h2><p class="text-sm text-slate-400">Xếp hạng setup đẹp nhất trong top coin theo Volume, Liquidity, FVG, MTF và Quality Score.</p></div><div class="flex gap-2"><button id="scanBtn" class="rounded-xl bg-fuchsia-500 hover:bg-fuchsia-400 text-slate-950 font-bold px-4 py-2">Scan Opportunities</button><button id="analyzeBestBtn" class="rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2">Analyze Best</button></div></div><div class="overflow-x-auto max-h-[520px] overflow-y-auto rounded-xl border border-slate-800"><table class="w-full text-sm"><thead class="sticky top-0 bg-slate-900 text-slate-400"><tr><th class="text-left p-2">Rank</th><th class="text-left p-2">Symbol</th><th class="text-left p-2">Signal</th><th class="text-left p-2">Q</th><th class="text-left p-2">Setup</th><th class="text-left p-2">Market</th><th class="text-left p-2">MTF</th><th class="text-left p-2">Risk</th><th class="text-left p-2">Exec</th><th class="text-left p-2">Why</th></tr></thead><tbody id="heatmapBody"><tr><td colspan="8" class="p-2 text-slate-500">Bấm Scan Opportunities để quét.</td></tr></tbody></table></div></section>
+
+    <section id="backtestPanel" class="bg-slate-900 rounded-2xl p-3 border border-slate-800 shadow-lg mb-4 panel-soft"><div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-7 gap-3 items-end"><div><label class="block text-sm text-slate-400 mb-1">Backtest timeframe</label><select id="backtestInterval" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2"><option value="15m">15m / 24h</option><option value="30m">30m / 24h</option><option value="1h">1H / 24h</option></select></div><div><label class="block text-sm text-slate-400 mb-1">Range</label><select id="backtestRange" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2"><option value="1" selected>1 ngày</option><option value="3">3 ngày</option><option value="7">7 ngày</option><option value="14">14 ngày</option></select></div><div><label class="block text-sm text-slate-400 mb-1">Fee/slippage</label><select id="feeModel" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2"><option value="0.0006" selected>0.06%</option><option value="0.001">0.10%</option><option value="0">Off</option></select></div><button id="backtestBtn" class="rounded-xl bg-violet-500 hover:bg-violet-400 text-slate-950 font-bold px-4 py-2">Backtest</button><div class="sm:col-span-2 xl:col-span-3 text-sm text-slate-400">Mô phỏng TP1 50%, BE sau TP1, TP2 50%, có fee/slippage.</div></div><div id="backtestBox" class="hidden mt-4"><div class="flex items-center justify-between mb-3"><h2 id="backtestTitle" class="section-title font-semibold text-lg">Backtest</h2><span id="backtestTime" class="text-sm text-slate-400">-</span></div><div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-10 gap-3 text-sm mb-3"><div class="bg-slate-950 rounded-xl p-3 border border-slate-800"><div class="text-slate-500">Nến test</div><div id="btCandles" class="font-bold text-lg">-</div></div><div class="bg-slate-950 rounded-xl p-3 border border-slate-800"><div class="text-slate-500">Lệnh</div><div id="btTrades" class="font-bold text-lg">-</div></div><div class="bg-slate-950 rounded-xl p-3 border border-slate-800"><div class="text-slate-500">Signal rate</div><div id="btSignalRate" class="font-bold text-lg">-</div></div><div class="bg-slate-950 rounded-xl p-3 border border-slate-800"><div class="text-slate-500">Winrate</div><div id="btWinrate" class="font-bold text-lg">-</div></div><div class="bg-slate-950 rounded-xl p-3 border border-slate-800"><div class="text-slate-500">Profit Factor</div><div id="btPF" class="font-bold text-lg">-</div></div><div class="bg-slate-950 rounded-xl p-3 border border-slate-800"><div class="text-slate-500">Gross R</div><div id="btR" class="font-bold text-lg">-</div></div><div class="bg-slate-950 rounded-xl p-3 border border-slate-800"><div class="text-slate-500">Risk Adj R</div><div id="btAdjR" class="font-bold text-lg">-</div></div><div class="bg-slate-950 rounded-xl p-3 border border-slate-800"><div class="text-slate-500">Max DD</div><div id="btDD" class="font-bold text-lg">-</div></div><div class="bg-slate-950 rounded-xl p-3 border border-slate-800"><div class="text-slate-500">Expectancy</div><div id="btExp" class="font-bold text-lg">-</div></div><div class="bg-slate-950 rounded-xl p-3 border border-slate-800"><div class="text-slate-500">Avg Quality</div><div id="btQuality" class="font-bold text-lg">-</div></div><div class="bg-slate-950 rounded-xl p-3 border border-slate-800"><div class="text-slate-500">Missed Entry</div><div id="btMissed" class="font-bold text-lg">-</div></div><div class="bg-slate-950 rounded-xl p-3 border border-slate-800"><div class="text-slate-500">Fill Rate</div><div id="btFillRate" class="font-bold text-lg">-</div></div></div><div id="btDetail" class="text-slate-400 text-sm mb-3">-</div><div class="grid grid-cols-1 lg:grid-cols-2 gap-3"><div class="rounded-2xl bg-slate-950 border border-slate-800 p-3"><h3 class="font-semibold mb-2">Rank Breakdown</h3><div id="btRankBreakdown" class="text-sm text-slate-400">-</div></div><div class="rounded-2xl bg-slate-950 border border-slate-800 p-3"><h3 class="font-semibold mb-2">Setup Breakdown</h3><div id="btSetupBreakdown" class="text-sm text-slate-400">-</div></div></div></div></section>
+
+    <footer class="bg-slate-900 rounded-2xl p-3 border border-slate-800 text-sm text-slate-400"><h3 class="font-semibold text-slate-200 mb-2">Strategy Modes</h3><p><b>Momentum:</b> EMA20/50 + RSI + volume + ATR + structure.</p><p class="mt-1"><b>Trend:</b> EMA34/89, ít lệnh hơn.</p><p class="mt-1"><b>Reversal:</b> liquidity sweep + CHOCH.</p><p class="mt-3 text-amber-300">Không phải lời khuyên tài chính. Futures có rủi ro cao.</p><p class="mt-3 text-slate-500">© dino98 — Crypto Futures Analyzer.</p></footer>
+  </main>
+
+<script>
+const BASE_URL="https://fapi.binance.com";
+const DEFAULT_SYMBOLS=["BTCUSDT","ETHUSDT","SOLUSDT","BNBUSDT","XRPUSDT","DOGEUSDT","ADAUSDT","AVAXUSDT","LINKUSDT","TONUSDT"];
+const WS_BASE="wss://fstream.binance.com/ws";
+const REFRESH_SECONDS=10;
+let chart,candleSeries,emaFastSeries,emaSlowSeries,entryLine,slLine,tp1Line,tp2Line,signalMarkerSeries;
+let lastOrderPlan=null,autoUpdate=true,refreshTimer=null,countdownTimer=null,nextRefreshAt=null,chartHidden=false,lastSignalKey="";
+let realtimeSocket=null,priceSocket=null,realtimeCandles=[],currentAnalysisCandles=[],lastRealtimeRender=0,realtimeStatus='REST',priceStatus='REST',mtfBiasCache='OFF',currentStreamKey='',currentPriceStreamKey='',latestLivePrice=null,lastMtfRefreshAt=0;
+let chartHasFit=false,chartUserInteracting=false,chartInteractionTimer=null,lastChartSymbol='',lastChartInterval='';
+let executionStateStore={};
+let lastScannerRows=[];
+let lockedTradePlan=null;
+let lockedPlanKey=null;
+let lockedPlanContext=null;
+
+function fmt(n,d=2){return Number.isFinite(n)?Number(n).toLocaleString("en-US",{maximumFractionDigits:d,minimumFractionDigits:d}):"-"}
+function compact(n){return Intl.NumberFormat("en-US",{notation:"compact",maximumFractionDigits:2}).format(n)}
+function avg(a){return a.reduce((x,y)=>x+y,0)/a.length}
+function ema(values,p){const k=2/(p+1),out=[];let prev=values[0];for(let i=0;i<values.length;i++){const v=i===0?values[i]:values[i]*k+prev*(1-k);out.push(v);prev=v}return out}
+function rsi(values,p=14){const out=Array(values.length).fill(null);let g=0,l=0;for(let i=1;i<=p;i++){const d=values[i]-values[i-1];if(d>=0)g+=d;else l-=d}let ag=g/p,al=l/p;out[p]=al===0?100:100-100/(1+ag/al);for(let i=p+1;i<values.length;i++){const d=values[i]-values[i-1];ag=(ag*(p-1)+Math.max(d,0))/p;al=(al*(p-1)+Math.max(-d,0))/p;out[i]=al===0?100:100-100/(1+ag/al)}return out}
+function atr(c,p=14){const tr=[];for(let i=0;i<c.length;i++){if(i===0)tr.push(c[i].high-c[i].low);else tr.push(Math.max(c[i].high-c[i].low,Math.abs(c[i].high-c[i-1].close),Math.abs(c[i].low-c[i-1].close)))}return ema(tr,p)}
+function sma(values,p){return values.map((_,i)=>i<p-1?null:avg(values.slice(i-p+1,i+1)))}
+function recentLow(c,n=12){return Math.min(...c.slice(-n).map(x=>x.low))}
+function recentHigh(c,n=12){return Math.max(...c.slice(-n).map(x=>x.high))}
+function nearestResistance(candles,entry,lookback=48){const highs=candles.slice(-lookback,-1).map(c=>c.high).filter(v=>v>entry).sort((a,b)=>a-b);return highs.length?highs[0]:null}
+function nearestSupport(candles,entry,lookback=48){const lows=candles.slice(-lookback,-1).map(c=>c.low).filter(v=>v<entry).sort((a,b)=>b-a);return lows.length?lows[0]:null}
+function findSwings(c,left=2,right=2){const highs=[],lows=[];for(let i=left;i<c.length-right;i++){let isH=true,isL=true;for(let j=i-left;j<=i+right;j++){if(j===i)continue;if(c[j].high>=c[i].high)isH=false;if(c[j].low<=c[i].low)isL=false}if(isH)highs.push({i,price:c[i].high,time:c[i].time});if(isL)lows.push({i,price:c[i].low,time:c[i].time})}return{highs,lows,lastHigh:highs.at(-1)||null,lastLow:lows.at(-1)||null,prevHigh:highs.at(-2)||null,prevLow:lows.at(-2)||null}}
+function candleBody(c){return Math.abs(c.close-c.open)}
+function candleRange(c){return Math.max(0.0000001,c.high-c.low)}
+function bodyRatio(c){return candleBody(c)/candleRange(c)}
+function isDisplacement(c,atrValue,dir=null){const body=candleBody(c),range=candleRange(c),ratio=body/range;if(dir==='BULLISH'&&c.close<=c.open)return false;if(dir==='BEARISH'&&c.close>=c.open)return false;return body>=atrValue*0.55&&ratio>=0.55}
+function structureEngine(c){
+  const swings=findSwings(c,2,2),last=c.at(-1),prev=c.at(-2),closes=c.map(x=>x.close),a=atr(c,14),atrValue=a.at(-1)||candleRange(last),vols=c.map(x=>x.volume),volAvg=sma(vols,20).at(-1)||avg(vols.slice(-20));
+  let bos="NONE",choch="NONE",bias="NEUTRAL",bosQuality="NONE";
+  const cleanBullBreak=swings.lastHigh&&last.close>swings.lastHigh.price&&isDisplacement(last,atrValue,'BULLISH')&&last.volume>=volAvg*0.9;
+  const cleanBearBreak=swings.lastLow&&last.close<swings.lastLow.price&&isDisplacement(last,atrValue,'BEARISH')&&last.volume>=volAvg*0.9;
+  if(cleanBullBreak){bos="BULLISH";bosQuality=last.volume>=volAvg*1.2?"STRONG":"VALID"}
+  if(cleanBearBreak){bos="BEARISH";bosQuality=last.volume>=volAvg*1.2?"STRONG":"VALID"}
+  if(swings.prevHigh&&swings.lastHigh&&swings.prevLow&&swings.lastLow){
+    const hh=swings.lastHigh.price>swings.prevHigh.price,hl=swings.lastLow.price>swings.prevLow.price,lh=swings.lastHigh.price<swings.prevHigh.price,ll=swings.lastLow.price<swings.prevLow.price;
+    if(hh&&hl)bias="BULLISH";
+    if(lh&&ll)bias="BEARISH";
+    if(bias==="BEARISH"&&cleanBullBreak)choch="BULLISH";
+    if(bias==="BULLISH"&&cleanBearBreak)choch="BEARISH";
+  }
+  const rangeHigh=Math.max(...c.slice(-48).map(x=>x.high)),rangeLow=Math.min(...c.slice(-48).map(x=>x.low)),mid=(rangeHigh+rangeLow)/2,zone=last.close>=mid?"PREMIUM":"DISCOUNT";
+  const bullSweep=swings.lastLow&&last.low<swings.lastLow.price&&last.close>swings.lastLow.price&&bodyRatio(last)>=0.35;
+  const bearSweep=swings.lastHigh&&last.high>swings.lastHigh.price&&last.close<swings.lastHigh.price&&bodyRatio(last)>=0.35;
+  return{swings,bos,choch,bias,bosQuality,rangeHigh,rangeLow,mid,zone,bullSweep,bearSweep,displacement:isDisplacement(last,atrValue),bodyRatio:bodyRatio(last)}
+}
+function fvgEngine(candles,lookback=80){
+  const zones=[];
+  const a=atr(candles,14);
+  for(let i=Math.max(2,candles.length-lookback);i<candles.length;i++){
+    const c1=candles[i-2],c2=candles[i-1],c3=candles[i],atrValue=a[i]||candleRange(c2);
+    if(c3.low>c1.high){
+      const low=c1.high,high=c3.low,size=high-low,mid=(low+high)/2,filled=Math.max(0,Math.min(1,(high-Math.min(...candles.slice(i+1).map(x=>x.low),high))/size));
+      zones.push({type:'BULLISH',i,low,high,mid,size,filled,quality:isDisplacement(c2,atrValue,'BULLISH')?'STRONG':'NORMAL'});
+    }
+    if(c3.high<c1.low){
+      const low=c3.high,high=c1.low,size=high-low,mid=(low+high)/2,filled=Math.max(0,Math.min(1,(Math.max(...candles.slice(i+1).map(x=>x.high),low)-low)/size));
+      zones.push({type:'BEARISH',i,low,high,mid,size,filled,quality:isDisplacement(c2,atrValue,'BEARISH')?'STRONG':'NORMAL'});
+    }
+  }
+  const active=zones.filter(z=>z.filled<0.95).slice(-8);
+  return{zones,active,lastBull:active.filter(z=>z.type==='BULLISH').at(-1)||null,lastBear:active.filter(z=>z.type==='BEARISH').at(-1)||null};
+}
+function liquidityEngine(candles){
+  const swings=findSwings(candles,2,2),last=candles.at(-1),eqTolerance=(atr(candles,14).at(-1)||candleRange(last))*0.18;
+  const recentHighs=swings.highs.slice(-8),recentLows=swings.lows.slice(-8);
+  const equalHighs=recentHighs.filter((h,_,arr)=>arr.some(x=>x!==h&&Math.abs(x.price-h.price)<=eqTolerance));
+  const equalLows=recentLows.filter((l,_,arr)=>arr.some(x=>x!==l&&Math.abs(x.price-l.price)<=eqTolerance));
+  const highLiquidity=equalHighs.length?Math.max(...equalHighs.map(x=>x.price)):(swings.lastHigh?.price||null);
+  const lowLiquidity=equalLows.length?Math.min(...equalLows.map(x=>x.price)):(swings.lastLow?.price||null);
+  const sweepHigh=highLiquidity&&last.high>highLiquidity&&last.close<highLiquidity;
+  const sweepLow=lowLiquidity&&last.low<lowLiquidity&&last.close>lowLiquidity;
+  return{equalHighs:equalHighs.length,equalLows:equalLows.length,highLiquidity,lowLiquidity,sweepHigh,sweepLow,targetHigh:highLiquidity,targetLow:lowLiquidity};
+}
+function noTradeEngine({regime,atrPct,score,structure,session,useSession,threshold,fvg,liq,allowChoppy=false}){
+  const reasons=[];
+  const hasFvg=!!(fvg&&(fvg.lastBull||fvg.lastBear));
+  const hasLiquidity=!!(liq&&(liq.sweepHigh||liq.sweepLow||liq.equalHighs||liq.equalLows));
+  const hasStructure=!!(structure&&(structure.bos!=="NONE"||structure.choch!=="NONE"||structure.bias!=="NEUTRAL"));
+  if(regime==="CHOPPY"&&!allowChoppy&&!hasFvg&&!hasLiquidity)reasons.push("Market CHOPPY");
+  if(atrPct<0.0015)reasons.push("ATR quá thấp");
+  if(atrPct>0.025)reasons.push("ATR spike quá mạnh");
+  if(score<threshold)reasons.push(`Score dưới ${threshold}`);
+  if(useSession&&session&&!session.ok)reasons.push("Ngoài giờ vàng VN");
+  if(!hasStructure&&!hasFvg&&!hasLiquidity)reasons.push("Structure/liquidity chưa rõ");
+  return{blocked:reasons.length>0,reasons}
+}
+function buildTradePlan(candles,signal,currentPrice,atrValue,rr,strategy,context={}){
+  if(signal==="WAIT")return{entry:currentPrice,sl:null,tp:null,tp1:null,tp2:null,risk:null,entryType:"NO_TRADE",note:"No trade"};
+  const fast=context.fast,slow=context.slow,i=candles.length-1,structure=context.structure||structureEngine(candles),fvg=context.fvg||fvgEngine(candles),liq=context.liq||liquidityEngine(candles),last=candles[i],direction=signal.includes("LONG")?"LONG":"SHORT";
+  let entry=currentPrice,entryType="MARKET_CONFIRM",note="Entry theo nến xác nhận";
+  const relevantFvg=direction==='LONG'?fvg.lastBull:fvg.lastBear;
+  if(relevantFvg&&relevantFvg.filled<0.8){entry=relevantFvg.mid;entryType="FVG_PULLBACK";note=`Entry tại FVG ${relevantFvg.quality.toLowerCase()} chưa fill`}
+  else if(strategy==="momentum"){
+    const emaFast=fast?fast[i]:currentPrice,emaSlow=slow?slow[i]:currentPrice,pullbackMid=direction==="LONG"?Math.max(emaFast,(emaFast+currentPrice)/2):Math.min(emaFast,(emaFast+currentPrice)/2),dist=Math.abs(currentPrice-emaFast);
+    if(dist<=atrValue*0.55){entry=currentPrice;entryType="MARKET_CONFIRM";note="Đủ gần EMA nhanh"}else{entry=pullbackMid;entryType="PULLBACK_LIMIT";note="Chờ pullback để tránh FOMO"}
+    if(direction==="LONG")entry=Math.max(entry,emaSlow+atrValue*0.05);if(direction==="SHORT")entry=Math.min(entry,emaSlow-atrValue*0.05)
+  }else if(strategy==="trend"){
+    const emaFast=fast?fast[i]:currentPrice,emaSlow=slow?slow[i]:currentPrice;entry=direction==="LONG"?Math.max(emaSlow,emaFast-atrValue*0.15):Math.min(emaSlow,emaFast+atrValue*0.15);entryType="TREND_RETEST_LIMIT";note="Entry retest EMA"
+  }else if(strategy==="reversal"){
+    entry=direction==="LONG"?Math.min(currentPrice,last.low+(last.close-last.low)*0.55):Math.max(currentPrice,last.high-(last.high-last.close)*0.55);entryType="REVERSAL_RECLAIM_LIMIT";note="Entry sau sweep/reclaim"
+  }
+  let sl,tp,tp1,tp2,risk;const minRisk=atrValue*0.35,maxRisk=atrValue*(strategy==="momentum"?1.15:strategy==="trend"?1.55:1.35);
+  if(direction==="LONG"){
+    const swingLow=recentLow(candles,14),liquidityLow=liq.lowLiquidity||structure.swings?.lastLow?.price||swingLow,fvgStop=relevantFvg?relevantFvg.low-atrValue*0.1:Infinity,structureStop=Math.min(swingLow,liquidityLow,fvgStop)-atrValue*0.12,atrStop=entry-atrValue*(strategy==="momentum"?0.75:strategy==="trend"?1.05:0.9);
+    sl=Math.max(structureStop,entry-maxRisk);sl=Math.min(sl,atrStop);if(entry-sl<minRisk)sl=entry-minRisk;risk=entry-sl;
+    const liqTarget=liq.targetHigh,rrTp1=entry+risk*Math.min(1,Math.max(0.4,rr*0.5)),rrTp2=entry+risk*rr,resistance1=nearestResistance(candles,entry,48);
+    tp1=resistance1&&resistance1>entry+risk*0.35&&resistance1<rrTp2?resistance1:rrTp1;
+    tp2=liqTarget&&liqTarget>tp1?Math.min(Math.max(rrTp2,entry+risk*1),liqTarget):rrTp2;tp=tp2;
+  }else{
+    const swingHigh=recentHigh(candles,14),liquidityHigh=liq.highLiquidity||structure.swings?.lastHigh?.price||swingHigh,fvgStop=relevantFvg?relevantFvg.high+atrValue*0.1:-Infinity,structureStop=Math.max(swingHigh,liquidityHigh,fvgStop)+atrValue*0.12,atrStop=entry+atrValue*(strategy==="momentum"?0.75:strategy==="trend"?1.05:0.9);
+    sl=Math.min(structureStop,entry+maxRisk);sl=Math.max(sl,atrStop);if(sl-entry<minRisk)sl=entry+minRisk;risk=sl-entry;
+    const liqTarget=liq.targetLow,rrTp1=entry-risk*Math.min(1,Math.max(0.4,rr*0.5)),rrTp2=entry-risk*rr,support1=nearestSupport(candles,entry,48);
+    tp1=support1&&support1<entry-risk*0.35&&support1>rrTp2?support1:rrTp1;
+    tp2=liqTarget&&liqTarget<tp1?Math.max(Math.min(rrTp2,entry-risk*1),liqTarget):rrTp2;tp=tp2;
+  }
+  return{entry,sl,tp,tp1,tp2,risk,entryType,note,fvg:relevantFvg}
+}
+function getThreshold(){const v=document.getElementById("sensitivity").value;return v==="conservative"?78:v==="aggressive"?62:70}
+function initChart(){const el=document.getElementById("chart");el.innerHTML="";chart=LightweightCharts.createChart(el,{layout:{background:{color:"#020617"},textColor:"#cbd5e1"},grid:{vertLines:{color:"#1e293b"},horzLines:{color:"#1e293b"}},timeScale:{timeVisible:true},rightPriceScale:{borderColor:"#334155"}});candleSeries=chart.addCandlestickSeries({upColor:"#34d399",downColor:"#fb7185",borderUpColor:"#34d399",borderDownColor:"#fb7185",wickUpColor:"#34d399",wickDownColor:"#fb7185"});emaFastSeries=chart.addLineSeries({color:"#22d3ee",lineWidth:2,title:"Fast EMA"});emaSlowSeries=chart.addLineSeries({color:"#f59e0b",lineWidth:2,title:"Slow EMA"});
+  chart.timeScale().subscribeVisibleLogicalRangeChange(()=>{
+    chartUserInteracting=true;
+    if(chartInteractionTimer)clearTimeout(chartInteractionTimer);
+    chartInteractionTimer=setTimeout(()=>chartUserInteracting=false,1200);
+  });
+}
+async function fetchTopSymbols24h(){const res=await fetch(`${BASE_URL}/fapi/v1/ticker/24hr`);if(!res.ok)throw new Error("Không lấy được top symbols");const data=await res.json();return data.filter(x=>x.symbol.endsWith("USDT")&&!x.symbol.includes("_")&&Number(x.quoteVolume)>0).sort((a,b)=>Number(b.quoteVolume)-Number(a.quoteVolume)).slice(0,10).map(x=>({symbol:x.symbol,quoteVolume:Number(x.quoteVolume),priceChangePercent:Number(x.priceChangePercent)}))}
+function renderSymbolDropdown(symbols){const s=document.getElementById("symbol"),sticky=document.getElementById("stickySymbol"),cur=localStorage.getItem("dino98_symbol")||s.value||sticky.value||"BTCUSDT";s.innerHTML="";sticky.innerHTML="";symbols.forEach((x,i)=>{const label=`${i+1}. ${x.symbol} · Vol ${compact(x.quoteVolume)} · ${x.priceChangePercent.toFixed(2)}%`;const o=document.createElement("option");o.value=x.symbol;o.textContent=label;s.appendChild(o);const so=document.createElement("option");so.value=x.symbol;so.textContent=label;sticky.appendChild(so)});if(symbols.some(x=>x.symbol===cur)){s.value=cur;sticky.value=cur}document.getElementById("symbolMeta").textContent=`Top 10 cập nhật: ${new Date().toLocaleString("vi-VN")}`}
+async function loadTopSymbols(){try{renderSymbolDropdown(await fetchTopSymbols24h())}catch(e){renderSymbolDropdown(DEFAULT_SYMBOLS.map(symbol=>({symbol,quoteVolume:0,priceChangePercent:0})));document.getElementById("symbolMeta").textContent="Không tải được realtime, dùng danh sách dự phòng."}}
+async function fetchKlines(symbol,interval,limit=300){const res=await fetch(`${BASE_URL}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);if(!res.ok)throw new Error("Không lấy được nến Binance Futures");return await res.json()}
+function parseKlines(raw){return raw.map(k=>({time:Math.floor(k[0]/1000),open:+k[1],high:+k[2],low:+k[3],close:+k[4],volume:+k[5]}))}
+function detectSweep(candles){const last=candles.at(-1),prev=candles.slice(-13,-1),ph=Math.max(...prev.map(c=>c.high)),pl=Math.min(...prev.map(c=>c.low));return{bull:last.low<pl&&last.close>pl,bear:last.high>ph&&last.close<ph}}
+function getSessionVN(){const h=Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Ho_Chi_Minh',hour:'2-digit',hour12:false}).format(new Date()));if(h>=19&&h<=23)return{name:'US Prime',ok:true};if(h>=14&&h<=17)return{name:'London',ok:true};if(h>=8&&h<=11)return{name:'Asia',ok:false};return{name:'Off-session',ok:false}}
+function marketRegime(candles,fast,slow,atrArr){const i=candles.length-1,price=candles[i].close,spread=Math.abs(fast[i]-slow[i])/price,atrPct=atrArr[i]/price,slope=(fast[i]-fast[Math.max(0,i-5)])/price;if(spread<0.0012&&atrPct<0.004)return'CHOPPY';if(atrPct>0.012)return'HIGH VOL';if(Math.abs(slope)>0.002&&spread>0.0015)return'TRENDING';return'RANGING'}
+function mtfBiasFromCandles(c){const closes=c.map(x=>x.close),f=ema(closes,20),s=ema(closes,50),i=c.length-1;if(f[i]>s[i]&&closes[i]>f[i])return'LONG';if(f[i]<s[i]&&closes[i]<f[i])return'SHORT';return'NEUTRAL'}
+function mtfSnapshot(c){const bias=mtfBiasFromCandles(c),structure=structureEngine(c),a=atr(c,14),price=c.at(-1).close;return{bias,structure:structure.bias,bos:structure.bos,choch:structure.choch,regime:marketRegime(c,ema(c.map(x=>x.close),20),ema(c.map(x=>x.close),50),a),atrPct:(a.at(-1)||0)/price}}
+async function getMtfEngine(symbol){
+  const [c4h,c1h,c15m,c5m]=await Promise.all([
+    fetchKlines(symbol,'4h',160).then(parseKlines),
+    fetchKlines(symbol,'1h',180).then(parseKlines),
+    fetchKlines(symbol,'15m',180).then(parseKlines),
+    fetchKlines(symbol,'5m',180).then(parseKlines)
+  ]);
+  const h4=mtfSnapshot(c4h),h1=mtfSnapshot(c1h),m15=mtfSnapshot(c15m),m5=mtfSnapshot(c5m);
+  let alignment='MIXED',score=0;
+  const votes=[h4.bias,h1.bias,m15.bias,m5.bias];
+  const longVotes=votes.filter(v=>v==='LONG').length,shortVotes=votes.filter(v=>v==='SHORT').length;
+  if(longVotes>=3){alignment='LONG';score=longVotes*25}
+  else if(shortVotes>=3){alignment='SHORT';score=shortVotes*25}
+  else score=Math.max(longVotes,shortVotes)*20;
+  return{alignment,score,h4,h1,m15,m5,label:`4H ${h4.bias} · 1H ${h1.bias} · 15m ${m15.bias} · 5m ${m5.bias}`};
+}
+function killZoneEngine(timeSec=null){
+  const date=timeSec?new Date(timeSec*1000):new Date();
+  const h=Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Ho_Chi_Minh',hour:'2-digit',hour12:false}).format(date));
+  const m=Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Ho_Chi_Minh',minute:'2-digit'}).format(date));
+  const mins=h*60+m;
+  const london=mins>=14*60&&mins<=17*60+30;
+  const ny=mins>=19*60&&mins<=22*60+30;
+  const asia=mins>=8*60&&mins<=11*60;
+  if(ny)return{name:'NY Kill Zone',quality:'HIGH',ok:true};
+  if(london)return{name:'London Kill Zone',quality:'MEDIUM',ok:true};
+  if(asia)return{name:'Asia Range',quality:'LOW',ok:false};
+  return{name:'Off Kill Zone',quality:'LOW',ok:false};
+}
+function sessionVolatilityModel(killZone,atrPct){
+  if(atrPct>0.025)return{state:'CHAOTIC',riskMult:0.4,note:'ATR spike, giảm risk mạnh'};
+  if(killZone.quality==='HIGH'&&atrPct>=0.003)return{state:'ACTIVE',riskMult:1,note:'Session tốt, volatility đủ'};
+  if(killZone.quality==='MEDIUM')return{state:'NORMAL',riskMult:0.8,note:'Session khá, giảm nhẹ risk'};
+  return{state:'QUIET',riskMult:0.5,note:'Ngoài giờ mạnh hoặc volatility thấp'};
+}
+function adaptiveRiskMultiplier({rank,mtf,sessionVol}){
+  let m=sessionVol.riskMult;
+  if(rank==='A+')m*=1;
+  else if(rank==='A')m*=0.85;
+  else if(rank==='B')m*=0.65;
+  else m*=0.4;
+  if(mtf&&mtf.alignment==='MIXED')m*=0.65;
+  return Math.max(0.25,Math.min(1,m));
+}
+function marketStateEngine(candles){
+  const closes=candles.map(x=>x.close);
+  const fast=ema(closes,20),slow=ema(closes,50),a=atr(candles,14);
+  const i=candles.length-1,last=candles[i];
+  const structure=structureEngine(candles),fvg=fvgEngine(candles),liq=liquidityEngine(candles);
+  const atrPct=(a[i]||0)/last.close;
+  const spread=Math.abs(fast[i]-slow[i])/last.close;
+  const slope=(fast[i]-fast[Math.max(0,i-8)])/last.close;
+  const extension=Math.abs(last.close-fast[i])/(a[i]||1);
+  let state='BALANCED',action='WAIT',quality=50,reason='Market bình thường';
+  if(atrPct>0.025){state='CHAOTIC';action='NO_TRADE';quality=15;reason='ATR spike mạnh, dễ giật 2 đầu'}
+  else if(spread<0.0012&&atrPct<0.004){state='COMPRESSION';action='WAIT_BREAKOUT';quality=45;reason='Nén biên độ, chờ breakout + reclaim'}
+  else if(structure.displacement&&Math.abs(slope)>0.0025&&spread>0.0015){state='EXPANSION';action='FOLLOW_PULLBACK';quality=80;reason='Có displacement và trend mở rộng'}
+  else if(extension>2.2){state='EXHAUSTION';action='WAIT_RETRACE';quality=35;reason='Giá quá xa EMA nhanh, dễ hồi/quét'}
+  else if(structure.bos!=='NONE'||structure.choch!=='NONE'){state='STRUCTURE_SHIFT';action='TRADE_RETEST';quality=75;reason='Có phá cấu trúc hợp lệ'}
+  else if(liq.sweepHigh||liq.sweepLow){state='LIQUIDITY_EVENT';action='TRADE_RECLAIM';quality=72;reason='Có sweep/reclaim thanh khoản'}
+  else if(fvg.lastBull||fvg.lastBear){state='IMBALANCE_ACTIVE';action='WAIT_FVG_FILL';quality=68;reason='Có FVG/imbalance đang hoạt động'}
+  else if(spread>0.0015){state='WEAK_TREND';action='SMALL_PULLBACK';quality=60;reason='Trend có nhưng chưa mạnh'}
+  return{state,action,quality,reason,atrPct,extension,spread,slope};
+}
+function mtfSnapshotAt(candles,timeSec){
+  const sliced=candles.filter(c=>c.time<=timeSec).slice(-180);
+  if(sliced.length<80)return null;
+  return mtfSnapshot(sliced);
+}
+async function getMtfBacktestCache(symbol){
+  const [c4h,c1h,c15m,c5m]=await Promise.all([
+    fetchKlines(symbol,'4h',1500).then(parseKlines),
+    fetchKlines(symbol,'1h',1500).then(parseKlines),
+    fetchKlines(symbol,'15m',1500).then(parseKlines),
+    fetchKlines(symbol,'5m',1500).then(parseKlines)
+  ]);
+  return{c4h,c1h,c15m,c5m};
+}
+function historicalMtfEngine(cache,timeSec){
+  if(!cache)return null;
+  const h4=mtfSnapshotAt(cache.c4h,timeSec),h1=mtfSnapshotAt(cache.c1h,timeSec),m15=mtfSnapshotAt(cache.c15m,timeSec),m5=mtfSnapshotAt(cache.c5m,timeSec);
+  if(!h4||!h1||!m15||!m5)return null;
+  const votes=[h4.bias,h1.bias,m15.bias,m5.bias];
+  const longVotes=votes.filter(v=>v==='LONG').length,shortVotes=votes.filter(v=>v==='SHORT').length;
+  let alignment='MIXED',score=Math.max(longVotes,shortVotes)*20;
+  if(longVotes>=3){alignment='LONG';score=longVotes*25}else if(shortVotes>=3){alignment='SHORT';score=shortVotes*25}
+  return{alignment,score,h4,h1,m15,m5,label:`4H ${h4.bias} · 1H ${h1.bias} · 15m ${m15.bias} · 5m ${m5.bias}`};
+}
+function mtfExecutionModel(mtfEngine,localRes){
+  if(!mtfEngine)return{model:'MTF_OFF',decision:'NEUTRAL',score:50,note:'MTF đang tắt'};
+  const dir=localRes.signal.includes('LONG')?'LONG':localRes.signal.includes('SHORT')?'SHORT':'WAIT';
+  if(dir==='WAIT')return{model:'NO_SIGNAL',decision:'WAIT',score:0,note:mtfEngine.label};
+  const h4=mtfEngine.h4?.bias,h1=mtfEngine.h1?.bias,m15=mtfEngine.m15?.bias,m5=mtfEngine.m5?.bias;
+  let model='MIXED',decision='REDUCE_RISK',score=55;
+  if(h4===dir&&h1===dir&&m15===dir){model='HTF_ALIGNED';decision='EXECUTE_PULLBACK';score=90}
+  else if(h1===dir&&m15===dir&&m5===dir){model='LTF_ALIGNED';decision='SCALP_OK';score=78}
+  else if(h4!==dir&&h1!==dir){model='HTF_CONFLICT';decision='NO_TRADE';score=25}
+  else if(mtfEngine.alignment!=='MIXED'){model='PARTIAL_ALIGN';decision='SMALL_SIZE';score=65}
+  return{model,decision,score,note:mtfEngine.label};
+}
+function strengthenedNoTradeFilter(res,marketState,mtfExec){
+  const reasons=[];
+  if(res.signal==='WAIT')return reasons;
+  if(marketState.state==='CHAOTIC')reasons.push('Market CHAOTIC');
+  if(marketState.state==='EXHAUSTION'&&res.ind.entryType!=='FVG_PULLBACK')reasons.push('Trend exhaustion, không chase market');
+  if(mtfExec&&mtfExec.decision==='NO_TRADE')reasons.push('HTF conflict');
+  if(res.ind.rank==='C'||res.ind.rank==='D')reasons.push('Setup rank thấp');
+  if(res.ind.atrPct<0.0015)reasons.push('ATR quá thấp');
+  return reasons;
+}
+let signalBirth={key:null,time:null};
+function getSignalAgeSeconds(res){
+  const symbol=document.getElementById('symbol')?.value||'';
+  const key=`${symbol}-${res.signal}-${res.ind?.setupType||''}-${res.ind?.rank||''}`;
+  if(res.signal==='WAIT'){signalBirth={key:null,time:null};return 0}
+  if(signalBirth.key!==key){signalBirth={key,time:Date.now()};return 0}
+  return Math.floor((Date.now()-signalBirth.time)/1000);
+}
+function confidenceDecayMultiplier(ageSec){
+  if(ageSec<60)return 1;
+  if(ageSec<180)return 0.9;
+  if(ageSec<300)return 0.75;
+  return 0.55;
+}
+function adaptiveQualityScore(res){
+  let q=res.score||0;
+  if(res.ind.rank==='A+')q+=8;
+  else if(res.ind.rank==='A')q+=4;
+  else if(res.ind.rank==='C')q-=8;
+  else if(res.ind.rank==='D')q-=20;
+  if(res.ind.entryType==='FVG_PULLBACK')q+=8;
+  if(res.ind.fvgType&&res.ind.fvgType!=='NONE')q+=4;
+  if(res.ind.killZone&&res.ind.killZone.includes('NY'))q+=5;
+  if(res.ind.sessionVol==='CHAOTIC')q-=20;
+  if(res.ind.sessionVol==='QUIET')q-=8;
+  if(res.ind.mtfDetail&&res.ind.mtfDetail.includes('MIXED'))q-=10;
+  const age=getSignalAgeSeconds(res);
+  const decay=confidenceDecayMultiplier(age);
+  q*=decay;
+  return{score:Math.round(Math.max(0,Math.min(100,q))),age,decay};
+}
+function dynamicTpMode(res){
+  if(res.signal==='WAIT')return 'NO_TRADE';
+  if(res.ind.liquidity&&(res.ind.liquidity.targetHigh||res.ind.liquidity.targetLow))return 'LIQUIDITY_TARGET';
+  if(res.ind.fvgType&&res.ind.fvgType!=='NONE')return 'FVG_TO_LIQUIDITY';
+  return 'RR_FALLBACK';
+}
+function setupLog(){try{return JSON.parse(localStorage.getItem('dino98_setup_log')||'[]')}catch{return[]}}
+function saveSetupLogItem(res,quality){
+  if(res.signal==='WAIT')return;
+  const symbol=document.getElementById('symbol').value;
+  const key=`${symbol}-${res.signal}-${res.ind.setupType}-${Math.floor(Date.now()/60000)}`;
+  const log=setupLog();
+  if(log[0]?.key===key)return;
+  log.unshift({key,time:new Date().toLocaleString('vi-VN'),symbol,signal:res.signal,setup:res.ind.setupType,rank:res.ind.rank,quality:quality.score});
+  localStorage.setItem('dino98_setup_log',JSON.stringify(log.slice(0,30)));
+}
+function renderSetupReplay(){
+  const body=document.getElementById('setupReplayBody');if(!body)return;
+  const log=setupLog();
+  const mem=document.getElementById('setupMemoryOut');if(mem)mem.textContent=log.length;
+  if(!log.length){body.innerHTML='<tr><td colspan="6" class="p-2 text-slate-500">Chưa có setup log.</td></tr>';return}
+  body.innerHTML=log.slice(0,8).map(x=>`<tr class="border-t border-slate-800"><td class="p-2">${x.time}</td><td class="p-2 font-bold">${x.symbol}</td><td class="p-2 ${x.signal.includes('LONG')?'text-emerald-300':x.signal.includes('SHORT')?'text-rose-300':'text-slate-300'}">${x.signal}</td><td class="p-2">${x.setup}</td><td class="p-2">${x.rank}</td><td class="p-2 font-bold">${x.quality}</td></tr>`).join('');
+}
+function renderPhase3Context(res){
+  const q=adaptiveQualityScore(res);
+  const tpMode=dynamicTpMode(res);
+  res.ind.qualityScore=q.score;res.ind.signalAge=q.age;res.ind.confidenceDecay=q.decay;res.ind.dynamicTpMode=tpMode;
+  document.getElementById('qualityScoreOut').textContent=q.score;
+  document.getElementById('confidenceDecayOut').textContent=`x${q.decay.toFixed(2)}`;
+  document.getElementById('signalAgeOut').textContent=`${q.age}s`;
+  document.getElementById('dynamicTpOut').textContent=tpMode;
+  document.getElementById('qualityRankOut').textContent=q.score>=90?'A+':q.score>=80?'A':q.score>=70?'B':q.score>=60?'C':'D';
+  saveSetupLogItem(res,q);
+  renderSetupReplay();
+}
+function analyzeSignal(candles,rr,strategy,extras={}){const closes=candles.map(c=>c.close),vols=candles.map(c=>c.volume),i=candles.length-1,last=candles[i],prev=candles[i-1],fastP=strategy==="trend"?34:20,slowP=strategy==="trend"?89:50,fast=ema(closes,fastP),slow=ema(closes,slowP),r=rsi(closes,14),a=atr(candles,14),atrAvg=sma(a,20),volAvg=sma(vols,20),sw=detectSweep(candles),structure=structureEngine(candles),fvg=fvgEngine(candles),liq=liquidityEngine(candles),price=last.close,bull=last.close>last.open&&last.close>prev.close,bear=last.close<last.open&&last.close<prev.close,volOK=last.volume>(volAvg[i]||0)*0.9,volStrong=last.volume>(volAvg[i]||0)*1.15,atrOK=a[i]>(atrAvg[i]||a[i])*0.85,regime=marketRegime(candles,fast,slow,a),atrPct=a[i]/price,session=getSessionVN(),mtfBias=extras.mtfBias||'N/A',threshold=extras.threshold||70;let longScore=0,shortScore=0,detail=[];function add(name,dir,pts,ok){detail.push({name,dir,pts,ok});if(ok){if(dir==="LONG")longScore+=pts;if(dir==="SHORT")shortScore+=pts;if(dir==="BOTH"){longScore+=pts;shortScore+=pts}}}if(strategy==="momentum"){add("EMA20 > EMA50","LONG",18,fast[i]>slow[i]);add("EMA20 < EMA50","SHORT",18,fast[i]<slow[i]);add("RSI momentum","LONG",14,r[i]>52&&r[i]<75);add("RSI momentum","SHORT",14,r[i]<48&&r[i]>25);add("Volume confirm","BOTH",10,volOK);add("Momentum candle","LONG",12,bull&&price>fast[i]);add("Momentum candle","SHORT",12,bear&&price<fast[i]);add("ATR đủ chạy","BOTH",8,atrOK);add("Market không CHOPPY","BOTH",8,regime!=="CHOPPY");add("BOS/CHOCH bullish","LONG",16,structure.bos==="BULLISH"||structure.choch==="BULLISH"||structure.bias==="BULLISH");add("BOS/CHOCH bearish","SHORT",16,structure.bos==="BEARISH"||structure.choch==="BEARISH"||structure.bias==="BEARISH");add("Bullish FVG active","LONG",12,!!fvg.lastBull&&fvg.lastBull.filled<0.8);add("Bearish FVG active","SHORT",12,!!fvg.lastBear&&fvg.lastBear.filled<0.8);add("Liquidity sweep low","LONG",10,liq.sweepLow||structure.bullSweep);add("Liquidity sweep high","SHORT",10,liq.sweepHigh||structure.bearSweep);add("Long discount","LONG",6,structure.zone==="DISCOUNT"||price<structure.rangeHigh-a[i]);add("Short premium","SHORT",6,structure.zone==="PREMIUM"||price>structure.rangeLow+a[i]);if(extras.useMTF){add("1H MTF cùng hướng","LONG",8,mtfBias==="LONG");add("1H MTF cùng hướng","SHORT",8,mtfBias==="SHORT")}if(extras.useSession)add("Đang giờ vàng VN","BOTH",6,session.ok)}if(strategy==="trend"){add("EMA34 > EMA89","LONG",35,fast[i]>slow[i]&&price>fast[i]);add("EMA34 < EMA89","SHORT",35,fast[i]<slow[i]&&price<fast[i]);add("RSI trend","LONG",20,r[i]>=50&&r[i]<=70);add("RSI trend","SHORT",20,r[i]>=30&&r[i]<=50);add("Volume mạnh","BOTH",20,volStrong);add("Nến xác nhận","LONG",15,bull);add("Nến xác nhận","SHORT",15,bear);add("ATR đủ chạy","BOTH",10,atrOK)}if(strategy==="reversal"){add("Bullish sweep","LONG",30,sw.bull||structure.bullSweep);add("Bearish sweep","SHORT",30,sw.bear||structure.bearSweep);add("CHOCH đảo chiều","LONG",18,structure.choch==="BULLISH");add("CHOCH đảo chiều","SHORT",18,structure.choch==="BEARISH");add("RSI OB/OS","LONG",18,r[i]<42);add("RSI OB/OS","SHORT",18,r[i]>58);add("Nến đảo chiều","LONG",16,bull);add("Nến đảo chiều","SHORT",16,bear);add("Volume sweep","BOTH",10,volOK);add("ATR đủ biến động","BOTH",8,atrOK)}let signal="WAIT",score=Math.max(longScore,shortScore),reason="Chưa đủ điểm vào lệnh.";const ntLong=noTradeEngine({regime,atrPct,score:longScore,structure,session,useSession:extras.useSession,threshold,fvg,liq,allowChoppy:strategy==='reversal'}),ntShort=noTradeEngine({regime,atrPct,score:shortScore,structure,session,useSession:extras.useSession,threshold,fvg,liq,allowChoppy:strategy==='reversal'});if(longScore>=threshold&&longScore>shortScore&&!ntLong.blocked){signal=longScore>=threshold+14?"STRONG LONG":"WEAK LONG";reason="LONG đạt ngưỡng chất lượng."}if(shortScore>=threshold&&shortScore>longScore&&!ntShort.blocked){signal=shortScore>=threshold+14?"STRONG SHORT":"WEAK SHORT";reason="SHORT đạt ngưỡng chất lượng."}let blockReasons=[];if(signal==="WAIT"){blockReasons=[...(longScore>=shortScore?ntLong.reasons:ntShort.reasons)];if(blockReasons.length)reason="NO TRADE: "+blockReasons.join(" · ")}const plan=buildTradePlan(candles,signal,price,a[i],rr,strategy,{fast,slow,structure,fvg,liq});let entry=plan.entry,sl=plan.sl,tp=plan.tp;if(signal!=="WAIT")reason+=` ${plan.note}. Entry type: ${plan.entryType}.`;const setupType=signal==='WAIT'?'NO_SETUP':(plan.entryType==='FVG_PULLBACK'?'Liquidity + FVG Pullback':(liq.sweepLow||liq.sweepHigh?'Liquidity Sweep Reclaim':(structure.bos!=='NONE'?'BOS Continuation':'Momentum Continuation')));
+const rank=signal==='WAIT'?'D':score>=90&&plan.entryType==='FVG_PULLBACK'?'A+':score>=84?'A':score>=74?'B':'C';
+return{signal,score,longScore,shortScore,reason,blockReasons,entry,sl,tp,tp1:plan.tp1,tp2:plan.tp2,tradePlan:plan,detail,series:{fast,slow},ind:{price,fast:fast[i],slow:slow[i],rsi:r[i],atr:a[i],atrOK,volOK,sweep:sw.bull?"Bull":sw.bear?"Bear":"No",fastP,slowP,regime,atrPct,mtfBias,session:session.name,sessionOK:session.ok,structureBias:structure.bias,bos:structure.bos,choch:structure.choch,zone:structure.zone,entryType:plan.entryType,risk:plan.risk,bosQuality:structure.bosQuality,fvgType:plan.fvg?.type||'NONE',fvgFill:plan.fvg?Math.round(plan.fvg.filled*100):null,liquidity:liq,setupType,rank}}}
+function analyzeSignalAt(c,rr,strategy,endIndex,extras={}){return analyzeSignal(c.slice(0,endIndex+1),rr,strategy,extras)}
+function clearTradeLines(){[entryLine,slLine,tp1Line,tp2Line].forEach(l=>{try{if(l)candleSeries.removePriceLine(l)}catch(e){}});entryLine=slLine=tp1Line=tp2Line=null}
+function drawTradeLines(res){clearTradeLines();if(!res||res.signal==="WAIT")return;entryLine=candleSeries.createPriceLine({price:res.entry,color:'#22d3ee',lineWidth:2,lineStyle:2,axisLabelVisible:true,title:'Entry'});slLine=candleSeries.createPriceLine({price:res.sl,color:'#fb7185',lineWidth:2,lineStyle:2,axisLabelVisible:true,title:'SL'});tp1Line=candleSeries.createPriceLine({price:res.tp1,color:'#a3e635',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'TP1'});tp2Line=candleSeries.createPriceLine({price:res.tp2,color:'#34d399',lineWidth:2,lineStyle:2,axisLabelVisible:true,title:'TP2'})}
+function resizeChart(){const el=document.getElementById("chart");if(chart&&el&&!chartHidden)chart.applyOptions({width:el.clientWidth,height:el.clientHeight})}
+function renderChart(candles,series,res,opts={}){
+  resizeChart();
+  const symbol=document.getElementById('symbol')?.value||'';
+  const interval=document.getElementById('interval')?.value||'';
+  const contextChanged=symbol!==lastChartSymbol||interval!==lastChartInterval;
+  if(contextChanged){chartHasFit=false;lastChartSymbol=symbol;lastChartInterval=interval}
+
+  const logicalRange=chart?.timeScale?.().getVisibleLogicalRange?.();
+  const shouldPreserveRange=logicalRange&&!opts.forceFit&&chartHasFit&&!contextChanged;
+
+  candleSeries.setData(candles.map(c=>({time:c.time,open:c.open,high:c.high,low:c.low,close:c.close})));
+  emaFastSeries.setData(candles.map((c,i)=>({time:c.time,value:series.fast[i]})).slice(60));
+  emaSlowSeries.setData(candles.map((c,i)=>({time:c.time,value:series.slow[i]})).slice(60));
+  drawTradeLines(res);
+  if(res&&res.signal!=="WAIT")candleSeries.setMarkers([{time:candles.at(-1).time,position:res.signal.includes("LONG")?'belowBar':'aboveBar',color:res.signal.includes("LONG")?'#34d399':'#fb7185',shape:res.signal.includes("LONG")?'arrowUp':'arrowDown',text:res.signal}]);else candleSeries.setMarkers([]);
+
+  if(shouldPreserveRange){
+    chart.timeScale().setVisibleLogicalRange(logicalRange);
+  }else if(!chartHasFit||opts.forceFit){
+    chart.timeScale().fitContent();
+    chartHasFit=true;
+  }
+}
+function renderPhase2Context(res,mtfEngine){
+  const kz=killZoneEngine();
+  const sv=sessionVolatilityModel(kz,res.ind.atrPct||0);
+  const ms=marketStateEngine(currentAnalysisCandles.length?currentAnalysisCandles:(realtimeCandles.length?realtimeCandles:[{open:res.ind.price,high:res.ind.price,low:res.ind.price,close:res.ind.price,volume:0,time:0}]));
+  const mtfExec=mtfExecutionModel(mtfEngine,res);
+  const strongBlocks=strengthenedNoTradeFilter(res,ms,mtfExec);
+  const riskMult=adaptiveRiskMultiplier({rank:res.ind.rank,mtf:mtfEngine,sessionVol:sv})*(mtfExec.decision==='REDUCE_RISK'?0.65:mtfExec.decision==='SMALL_SIZE'?0.75:1);
+  document.getElementById('mtfBias').textContent=mtfEngine?`${mtfEngine.alignment} · ${mtfExec.model}`:res.ind.mtfBias;
+  document.getElementById('mtfDetail').textContent=mtfEngine?`${mtfEngine.label} · ${mtfExec.decision}`:'MTF off';
+  document.getElementById('killZoneOut').textContent=kz.name;
+  document.getElementById('sessionVN').textContent=kz.quality;
+  document.getElementById('sessionVolOut').textContent=sv.state;
+  document.getElementById('sessionVolNote').textContent=sv.note;
+  document.getElementById('adaptiveRiskOut').textContent=`x${riskMult.toFixed(2)}`;
+  document.getElementById('marketStateOut').textContent=`${ms.state} · ${ms.action}`;
+  res.ind.killZone=kz.name;res.ind.sessionVol=sv.state;res.ind.adaptiveRisk=riskMult;res.ind.mtfDetail=mtfEngine?mtfEngine.label:'MTF off';res.ind.marketState=ms.state;res.ind.marketAction=ms.action;res.ind.mtfExec=mtfExec.model;res.ind.mtfDecision=mtfExec.decision;res.ind.strongBlocks=strongBlocks;
+  if(strongBlocks.length){
+    res.blockReasons=[...(res.blockReasons||[]),...strongBlocks];
+    const noTradeBox=document.getElementById('noTradeBox'),noTradeReasons=document.getElementById('noTradeReasons');
+    noTradeBox.classList.remove('hidden');
+    noTradeReasons.innerHTML=res.blockReasons.map(x=>`<span class="rounded-full bg-amber-900/80 border border-amber-700 px-3 py-1 text-amber-100">${x}</span>`).join('');
+  }
+  updateOrderTicket();
+}
+function setUI(res,rr){
+  if(res.signal!=='WAIT')updateExecutionMemory(res.ind.price,res);
+  lastOrderPlan=res;const box=document.getElementById("signalBox");document.getElementById("signal").textContent=res.signal;document.getElementById("score").textContent=res.score;document.getElementById("reason").textContent=res.reason;box.className="rounded-2xl p-3 border mb-3 "+(res.signal.includes("LONG")?"bg-emerald-950 border-emerald-500":res.signal.includes("SHORT")?"bg-rose-950 border-rose-500":"bg-slate-950 border-slate-800");document.getElementById("price").textContent=fmt(res.ind.price);document.getElementById("emaFast").textContent=`EMA${res.ind.fastP}: ${fmt(res.ind.fast)}`;document.getElementById("emaSlow").textContent=`EMA${res.ind.slowP}: ${fmt(res.ind.slow)}`;document.getElementById("rsi").textContent=fmt(res.ind.rsi);document.getElementById("atr").textContent=fmt(res.ind.atr);document.getElementById("volatility").textContent=res.ind.atrOK?"OK":"LOW";document.getElementById("sweep").textContent=res.ind.sweep;document.getElementById("regime").textContent=res.ind.regime;document.getElementById("confidenceBar").style.width=`${Math.min(100,res.score)}%`;document.getElementById("confidenceText").textContent=`${res.score}/100 · ${res.score>=80?'High':res.score>=65?'Medium':'Low'}`;document.getElementById("structureBias").textContent=res.ind.structureBias;document.getElementById("bosOut").textContent=res.ind.bos;document.getElementById("chochOut").textContent=res.ind.choch;document.getElementById("zoneOut").textContent=res.ind.zone;document.getElementById("atrPctOut").textContent=res.ind.atrPct?`${(res.ind.atrPct*100).toFixed(2)}%`:"-";document.getElementById("entryLogicOut").textContent=res.ind.entryType;document.getElementById("setupTypeOut").textContent=res.ind.setupType||"-";document.getElementById("rankFvgOut").textContent=`${res.ind.rank||'-'} | ${res.ind.fvgType||'NONE'}${res.ind.fvgFill!==null?' '+res.ind.fvgFill+'%':''}`;document.getElementById("entry").textContent=res.signal==="WAIT"?"-":fmt(res.entry);document.getElementById("sl").textContent=res.signal==="WAIT"?"-":fmt(res.sl);document.getElementById("tp1").textContent=res.signal==="WAIT"?"-":fmt(res.tp1);document.getElementById("tp2").textContent=res.signal==="WAIT"?"-":fmt(res.tp2);document.getElementById("tp").textContent=res.signal==="WAIT"?"-":fmt(res.tp);document.getElementById("rrOut").textContent=res.signal==="WAIT"?"-":`1:${rr}`;document.getElementById("entryType").textContent=res.ind.entryType||"-";document.getElementById("riskPerCoin").textContent=res.signal==="WAIT"?"-":fmt(res.ind.risk);document.getElementById("planNote").textContent=res.tradePlan?.note||"-";document.getElementById("planNote").title=res.tradePlan?.note||"-";updateEntryProximity(latestLivePrice||res.ind.price);const stickyMini=document.getElementById("stickySignalMini");stickyMini.textContent=`${res.signal} · ${res.score}`;stickyMini.className="rounded-full border px-3 py-2 "+(res.signal.includes("LONG")?"bg-emerald-950 border-emerald-700 text-emerald-200":res.signal.includes("SHORT")?"bg-rose-950 border-rose-700 text-rose-200":"bg-slate-900 border-slate-700 text-slate-300");const noTradeBox=document.getElementById("noTradeBox"),noTradeReasons=document.getElementById("noTradeReasons");if(res.signal==="WAIT"&&res.blockReasons?.length){noTradeBox.classList.remove("hidden");noTradeReasons.innerHTML=res.blockReasons.map(x=>`<span class="rounded-full bg-amber-900/80 border border-amber-700 px-3 py-1 text-amber-100">${x}</span>`).join("")}else{noTradeBox.classList.add("hidden");noTradeReasons.innerHTML=""}document.getElementById("scoreDetail").innerHTML=res.detail.map(d=>`<div class="flex items-center justify-between gap-2 rounded-xl bg-slate-950 border border-slate-800 px-2 py-1.5 min-h-[34px]"><span class="truncate" title="${d.name}">${d.ok?"✅":"⚪"} ${d.name}</span><b class="shrink-0 ${d.dir==='LONG'?'text-emerald-300':d.dir==='SHORT'?'text-rose-300':'text-cyan-300'}">+${d.ok?d.pts:0}</b></div>`).join("");updateOrderTicket();notifyOnSignal(res)}
+function updateOrderTicket(){const r=lastOrderPlan;if(!r||r.signal==='WAIT'||!r.sl||!r.tp){['riskUsdt','actualRiskPct','positionSize','qtyCoin','slDistance','suggestedMargin','sizingMode'].forEach(id=>document.getElementById(id).textContent='-');renderRiskGuard(null);return}
+  const exec=getExecutionStatus(latestLivePrice||r.ind.price,r);
+  if(['STALE PLAN','MISSED ENTRY','TP2 DONE','INVALIDATED'].includes(exec.label)){
+    ['riskUsdt','actualRiskPct','positionSize','qtyCoin','slDistance','suggestedMargin'].forEach(id=>document.getElementById(id).textContent='-');
+    document.getElementById('sizingMode').textContent=exec.label;
+    renderRiskGuard(null);
+    return;
+  }
+  const account=+document.getElementById('accountSize').value||0,targetRiskPct=+document.getElementById('riskPct').value||0,lev=+document.getElementById('leverage').value||1,tradeMarginValue=document.getElementById('tradeMargin').value,entry=r.entry,sl=r.sl,slPct=Math.abs(entry-sl)/entry;if(slPct<=0)return;const adaptiveMult=r.ind.adaptiveRisk||1;
+const targetRiskUsdt=account*targetRiskPct/100*adaptiveMult;
+let margin=0,position=0,actualRiskUsdt=0,actualRiskPct=0,sizingMode='AUTO RISK';
+if(tradeMarginValue==='auto'){
+  position=targetRiskUsdt/slPct;
+  margin=position/lev;
+  actualRiskUsdt=targetRiskUsdt;
+  actualRiskPct=targetRiskPct*adaptiveMult;
+  sizingMode=adaptiveMult<0.99?'AUTO RISK ADAPTIVE':'AUTO RISK';
+}else{
+  margin=+tradeMarginValue;
+  position=margin*lev;
+  actualRiskUsdt=position*slPct;
+  actualRiskPct=account>0?actualRiskUsdt/account*100:0;
+  sizingMode='FIXED MARGIN';
+}const qty=position/entry;document.getElementById('riskUsdt').textContent=`${fmt(actualRiskUsdt,2)} USDT`;document.getElementById('actualRiskPct').textContent=`${actualRiskPct.toFixed(2)}%`;document.getElementById('positionSize').textContent=`${fmt(position,2)} USDT`;document.getElementById('qtyCoin').textContent=qty.toFixed(6);document.getElementById('slDistance').textContent=`${(slPct*100).toFixed(2)}%`;document.getElementById('suggestedMargin').textContent=`${fmt(margin,2)} USDT`;document.getElementById('sizingMode').textContent=sizingMode;renderRiskGuard({account,riskPct:actualRiskPct,targetRiskPct,lev,margin,position,slPct,signal:r.signal,score:r.score,regime:r.ind.regime,sizingMode})}
+function renderRiskGuard(data){const status=document.getElementById('riskGuardStatus'),list=document.getElementById('riskGuardList');if(!data){status.textContent='No active trade';status.className='text-xs rounded-full px-3 py-1 bg-slate-800 border border-slate-700 text-slate-300';list.innerHTML='<div class="rounded-xl bg-slate-950 border border-slate-800 p-3 text-slate-500">Chưa có trade plan hợp lệ.</div>';return}const warnings=[],items=[];function addItem(label,value,ok,msg){items.push({label,value,ok,msg});if(!ok)warnings.push(msg)}addItem('Risk %',`${data.riskPct.toFixed(1)}%`,data.riskPct<=3,'Risk% cao hơn 3%');addItem('Leverage',`x${data.lev}`,data.lev<=10,'Leverage cao hơn x10');addItem('Margin / Account',data.account?`${(data.margin/data.account*100).toFixed(1)}%`:'-',data.account?data.margin/data.account<=0.35:true,'Margin >35% tài khoản');addItem('SL Distance',`${(data.slPct*100).toFixed(2)}%`,data.slPct<=0.02&&data.slPct>=0.002,'SL quá gần/xa');addItem('Score',`${data.score}/100`,data.score>=70,'Score dưới 70');addItem('Regime',data.regime,data.regime!=='CHOPPY','Market CHOPPY');const safe=warnings.length===0;status.textContent=safe?'OK':'CHECK';status.className=safe?'text-xs rounded-full px-3 py-1 bg-emerald-950 border border-emerald-700 text-emerald-200':'text-xs rounded-full px-3 py-1 bg-amber-950 border border-amber-700 text-amber-200';list.innerHTML=items.map(x=>`<div class="rounded-xl ${x.ok?'bg-slate-950 border-slate-800':'bg-amber-950/60 border-amber-700'} border p-3"><div class="text-slate-500">${x.label}</div><div class="font-bold mt-1 ${x.ok?'text-slate-100':'text-amber-200'}">${x.value}</div><div class="text-[11px] mt-1 ${x.ok?'text-slate-500':'text-amber-300'}">${x.ok?'Ổn':x.msg}</div></div>`).join('')}
+function orderPlanText(){const r=lastOrderPlan;if(!r||r.signal==='WAIT')return 'No valid trade signal.';const symbol=document.getElementById('symbol').value,interval=document.getElementById('interval').value,strategy=document.getElementById('strategy').value,exec=getExecutionStatus(latestLivePrice||r.ind.price,r);return `${symbol} ${interval} | ${strategy}
+Signal: ${r.signal} | Score: ${r.score}/100
+Execution: ${exec.label}
+Signal Price: ${document.getElementById('signalPriceOut')?.textContent||'-'}
+Current Price: ${document.getElementById('currentPriceOut')?.textContent||'-'}
+Since Signal: ${document.getElementById('sinceSignalOut')?.textContent||'-'}
+Entry Type: ${r.ind.entryType}
+Entry: ${fmt(r.entry)}
+SL: ${fmt(r.sl)}
+TP1: ${fmt(r.tp1)}
+TP2/Final: ${fmt(r.tp2)}
+Final RR: 1:${document.getElementById('rr').value}
+Risk/Coin: ${fmt(r.ind.risk)}
+Regime: ${r.ind.regime}
+Structure: ${r.ind.structureBias} | BOS ${r.ind.bos} | CHOCH ${r.ind.choch} | ${r.ind.zone}
+Setup: ${r.ind.setupType} | Rank ${r.ind.rank} | FVG ${r.ind.fvgType}${r.ind.fvgFill!==null?' '+r.ind.fvgFill+'%':''}
+MTF: ${r.ind.mtfBias} | ${r.ind.mtfDetail||''}
+Kill Zone: ${r.ind.killZone||'-'} | Session Vol: ${r.ind.sessionVol||'-'} | Adaptive Risk: x${r.ind.adaptiveRisk?Number(r.ind.adaptiveRisk).toFixed(2):'-'}
+No-Trade: ${r.blockReasons?.length?r.blockReasons.join(', '):'None'}
+Risk: ${document.getElementById('riskUsdt').textContent}
+Actual Risk%: ${document.getElementById('actualRiskPct').textContent}
+Position: ${document.getElementById('positionSize').textContent}
+Margin: ${document.getElementById('suggestedMargin').textContent}
+Qty: ${document.getElementById('qtyCoin').textContent}
+Quality Score: ${r.ind.qualityScore??'-'} | Decay: x${r.ind.confidenceDecay??'-'} | Signal age: ${r.ind.signalAge??'-'}s
+Dynamic TP: ${r.ind.dynamicTpMode??'-'}`}
+async function copyText(t){try{await navigator.clipboard.writeText(t);alert('Đã copy.')}catch(e){prompt('Copy thủ công:',t)}}
+function currentPlanContext(){
+  return `${document.getElementById('symbol')?.value||''}|${document.getElementById('interval')?.value||''}|${document.getElementById('strategy')?.value||''}|${document.getElementById('rr')?.value||''}`;
+}
+function isTerminalExecutionLabel(label){
+  return ['STALE PLAN','MISSED ENTRY','TP2 DONE','INVALIDATED','NO TRADE'].includes(label);
+}
+function isStaleLimitPlan(r,price){
+  if(!r||r.signal==='WAIT'||!Number.isFinite(price))return false;
+  const limitLike=['FVG_PULLBACK','PULLBACK_LIMIT','TREND_RETEST_LIMIT','REVERSAL_RECLAIM_LIMIT'].includes(r.ind?.entryType);
+  if(!limitLike)return false;
+  if(r.signal.includes('SHORT')){
+    return price<=Math.max(r.tp1??Infinity,r.tp2??Infinity);
+  }
+  if(r.signal.includes('LONG')){
+    return price>=Math.min(r.tp1??-Infinity,r.tp2??-Infinity);
+  }
+  return false;
+}
+function clearLockedTradePlan(){
+  lockedTradePlan=null;
+  lockedPlanKey=null;
+  lockedPlanContext=null;
+}
+function resolveTradePlanLock(freshRes,isAuto,livePrice){
+  const ctx=currentPlanContext();
+  if(isAuto&&lockedTradePlan&&lockedPlanContext===ctx){
+    const exec=getExecutionStatus(livePrice||lockedTradePlan.ind?.price||lockedTradePlan.entry,lockedTradePlan);
+    if(!isTerminalExecutionLabel(exec.label)){
+      lockedTradePlan.series=freshRes.series;
+      lockedTradePlan.ind={...lockedTradePlan.ind,price:livePrice||freshRes.ind.price,fast:freshRes.ind.fast,slow:freshRes.ind.slow,rsi:freshRes.ind.rsi,atr:freshRes.ind.atr,atrPct:freshRes.ind.atrPct,regime:freshRes.ind.regime,mtfBias:freshRes.ind.mtfBias,session:freshRes.ind.session};
+      lockedTradePlan.reason=`Đang khóa kế hoạch lệnh cũ để Entry/SL/TP không bị nhảy. ${lockedTradePlan.reason||''}`;
+      return lockedTradePlan;
+    }
+  }
+  if(!isAuto)clearLockedTradePlan();
+  if(freshRes.signal!=='WAIT'){
+    lockedTradePlan=freshRes;
+    lockedPlanKey=getSignalKey(freshRes);
+    lockedPlanContext=ctx;
+  }
+  return freshRes;
+}
+async function analyze(isAuto=false){const btn=document.getElementById("analyzeBtn");if(!isAuto){btn.disabled=true;btn.textContent="Analyzing..."}try{saveSettings();const symbol=document.getElementById("symbol").value,interval=document.getElementById("interval").value,rr=+document.getElementById("rr").value,strategy=document.getElementById("strategy").value,useMTF=document.getElementById("mtfFilter").checked,useSession=document.getElementById("sessionFilter").checked,threshold=getThreshold();let mtfEngine=null;mtfBiasCache='OFF';if(useMTF){
+      const now=Date.now();
+      if(!window.currentMtfEngine||now-lastMtfRefreshAt>5*60*1000){
+        mtfEngine=await getMtfEngine(symbol);
+        window.currentMtfEngine=mtfEngine;
+        lastMtfRefreshAt=now;
+      }else mtfEngine=window.currentMtfEngine;
+      mtfBiasCache=mtfEngine.alignment;
+    }else{window.currentMtfEngine=null}
+    const candles=parseKlines(await fetchKlines(symbol,interval,300));realtimeCandles=candles;currentAnalysisCandles=candles;const freshRes=analyzeSignal(candles,rr,strategy,{useMTF,useSession,mtfBias:mtfBiasCache,threshold,mtfEngine});const res=resolveTradePlanLock(freshRes,isAuto,latestLivePrice||freshRes.ind.price);renderChart(candles,res.series,res,{forceFit:false});setUI(res,rr);renderPhase2Context(res,mtfEngine);renderPhase3Context(res);document.getElementById("lastUpdate").textContent=`${symbol} · ${interval} · ${new Date().toLocaleString("vi-VN")}`;if(autoUpdate)connectRealtimeStream()}catch(e){if(!isAuto)alert(e.message)}finally{if(!isAuto){btn.disabled=false;btn.textContent="Analyze"}}}
+function updateCountdown(){
+  const el=document.getElementById("countdown"),stickyEl=document.getElementById("stickyCountdown");
+  if(!autoUpdate){el.textContent="Auto OFF";stickyEl.textContent="Auto OFF";return}
+  const status=(realtimeStatus==='WS'||priceStatus==='WS')?'Auto ON · Live Price':'Auto ON · REST fallback';
+  el.textContent=status;
+  stickyEl.textContent=status;
+}
+function startAuto(){
+  stopAuto(false);
+  autoUpdate=true;
+  ["autoBtn","stickyAutoBtn"].forEach(id=>{document.getElementById(id).textContent="Auto ON";document.getElementById(id).className="rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-2"});
+  countdownTimer=setInterval(updateCountdown,500);
+  // WebSocket realtime là chính, REST 10s là fallback để tránh đứng dữ liệu nếu WS bị chặn/mất gói.
+  refreshTimer=setInterval(()=>analyze(true),REFRESH_SECONDS*1000);
+  updateCountdown();
+  connectRealtimeStream();
+}
+function stopAuto(mark=true){
+  if(refreshTimer)clearInterval(refreshTimer);
+  if(countdownTimer)clearInterval(countdownTimer);
+  refreshTimer=countdownTimer=null;
+  disconnectRealtimeStream();
+  disconnectPriceStream();
+  if(mark){
+    autoUpdate=false;
+    nextRefreshAt=null;
+    ["autoBtn","stickyAutoBtn"].forEach(id=>{document.getElementById(id).textContent="Auto OFF";document.getElementById(id).className="rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold px-3 py-2"});
+    updateCountdown();
+  }
+}
+function simulateTrade(candles,start,r,feeR){
+  let halfClosed=false,outcome="OPEN",R=0,exitIdx=null,entryFilled=false;
+  const isLong=r.signal.includes("LONG");
+  const limitLike=['FVG_PULLBACK','PULLBACK_LIMIT','TREND_RETEST_LIMIT','REVERSAL_RECLAIM_LIMIT'].includes(r.ind.entryType);
+  for(let j=start+1;j<candles.length;j++){
+    const c=candles[j];
+    if(!entryFilled){
+      if(!limitLike)entryFilled=true;
+      else if(isLong&&c.low<=r.entry)entryFilled=true;
+      else if(!isLong&&c.high>=r.entry)entryFilled=true;
+      if(!entryFilled){
+        if(isLong&&c.high>=r.tp1){outcome="MISSED";exitIdx=j;break}
+        if(!isLong&&c.low<=r.tp1){outcome="MISSED";exitIdx=j;break}
+        continue;
+      }
+    }
+    if(isLong){
+      if(!halfClosed&&c.high>=r.tp1){R+=0.5*((r.tp1-r.entry)/r.ind.risk)-feeR;halfClosed=true}
+      const stop=halfClosed?r.entry:r.sl;
+      if(c.low<=stop){R+=halfClosed?0-feeR:-1-feeR;outcome=R>0?"WIN":"LOSS";exitIdx=j;break}
+      if(c.high>=r.tp2){R+=0.5*((r.tp2-r.entry)/r.ind.risk)-feeR;outcome="WIN";exitIdx=j;break}
+    }else{
+      if(!halfClosed&&c.low<=r.tp1){R+=0.5*((r.entry-r.tp1)/r.ind.risk)-feeR;halfClosed=true}
+      const stop=halfClosed?r.entry:r.sl;
+      if(c.high>=stop){R+=halfClosed?0-feeR:-1-feeR;outcome=R>0?"WIN":"LOSS";exitIdx=j;break}
+      if(c.low<=r.tp2){R+=0.5*((r.entry-r.tp2)/r.ind.risk)-feeR;outcome="WIN";exitIdx=j;break}
+    }
+  }
+  return{outcome,R,exitIdx,entryFilled}
+}
+function backtestPhaseContext(res, mtfEngine, candles){
+  const kz=killZoneEngine(candles.at(-1)?.time||null);
+  const sv=sessionVolatilityModel(kz,res.ind.atrPct||0);
+  const ms=marketStateEngine(candles);
+  const mtfExec=mtfExecutionModel(mtfEngine,res);
+  const blocks=strengthenedNoTradeFilter(res,ms,mtfExec);
+  let riskMult=adaptiveRiskMultiplier({rank:res.ind.rank,mtf:mtfEngine,sessionVol:sv});
+  if(mtfExec.decision==='REDUCE_RISK')riskMult*=0.65;
+  if(mtfExec.decision==='SMALL_SIZE')riskMult*=0.75;
+  if(blocks.length)riskMult*=0.35;
+  res.ind.killZone=kz.name;
+  res.ind.sessionVol=sv.state;
+  res.ind.adaptiveRisk=riskMult;
+  res.ind.mtfDetail=mtfEngine?mtfEngine.label:'MTF off';
+  res.ind.marketState=ms.state;
+  res.ind.marketAction=ms.action;
+  res.ind.mtfExec=mtfExec.model;
+  res.ind.mtfDecision=mtfExec.decision;
+  res.ind.strongBlocks=blocks;
+  const q=adaptiveQualityScore(res);
+  res.ind.qualityScore=q.score;
+  res.ind.confidenceDecay=q.decay;
+  res.ind.signalAge=q.age;
+  res.ind.dynamicTpMode=dynamicTpMode(res);
+  return {riskMult,quality:q.score,kz,sv,ms,mtfExec,blocks};
+}
+function groupStats(trades,keyFn){
+  const groups={};
+  trades.forEach(t=>{
+    const k=keyFn(t)||'Unknown';
+    if(!groups[k])groups[k]={n:0,w:0,l:0,r:0,adj:0};
+    groups[k].n++;
+    if(t.R>0)groups[k].w++;
+    if(t.R<0)groups[k].l++;
+    groups[k].r+=t.R;
+    groups[k].adj+=t.adjR||0;
+  });
+  return Object.entries(groups).sort((a,b)=>b[1].n-a[1].n).map(([k,v])=>`<div class="flex justify-between border-b border-slate-800 py-1"><span>${k}</span><span>${v.n} lệnh · WR ${v.w+v.l?((v.w/(v.w+v.l))*100).toFixed(0):'-'}% · ${v.adj.toFixed(2)} adjR</span></div>`).join('')||'-';
+}
+async function runBacktest24h(){
+  const btn=document.getElementById("backtestBtn");btn.disabled=true;btn.textContent="Backtesting...";
+  try{
+    const symbol=document.getElementById("symbol").value,interval=document.getElementById("backtestInterval").value,days=+document.getElementById("backtestRange").value,rr=+document.getElementById("rr").value,strategy=document.getElementById("strategy").value,fee=+document.getElementById("feeModel").value,threshold=getThreshold(),useMTF=document.getElementById('mtfFilter').checked,useSession=document.getElementById('sessionFilter').checked;
+    const perDay={"15m":96,"30m":48,"1h":24},test=perDay[interval]*days,limit=Math.min(1500,Math.max(170,test+100));
+    const candles=parseKlines(await fetchKlines(symbol,interval,limit));
+    const mtfCache=useMTF?await getMtfBacktestCache(symbol):null;
+    const initialMtf=useMTF?historicalMtfEngine(mtfCache,candles[Math.max(90,candles.length-test)]?.time||candles.at(-1).time):null;
+    const mtfBias=initialMtf?initialMtf.alignment:'OFF';
+    const start=Math.max(90,candles.length-test),trades=[];
+    let equity=0,peak=0,maxDD=0,adjEquity=0,adjPeak=0,adjDD=0;
+    for(let i=start;i<candles.length-1;i++){
+      const mtfEngineAt=useMTF?historicalMtfEngine(mtfCache,candles[i].time):null;
+      const mtfBiasAt=mtfEngineAt?mtfEngineAt.alignment:'OFF';
+      const r=analyzeSignalAt(candles,rr,strategy,i,{threshold,useMTF,useSession,mtfBias:mtfBiasAt,mtfEngine:mtfEngineAt});
+      if(r.signal==="WAIT")continue;
+      const ctx=backtestPhaseContext(r,mtfEngineAt,candles.slice(0,i+1));
+      if(ctx.blocks.includes('Market CHAOTIC')||ctx.blocks.includes('HTF conflict'))continue;
+      const feeR=fee/Math.max(0.0001,Math.abs(r.entry-r.sl)/r.entry);
+      const sim=simulateTrade(candles,i,r,feeR);
+      const adjR=sim.R*ctx.riskMult;
+      equity+=sim.R;peak=Math.max(peak,equity);maxDD=Math.min(maxDD,equity-peak);
+      adjEquity+=adjR;adjPeak=Math.max(adjPeak,adjEquity);adjDD=Math.min(adjDD,adjEquity-adjPeak);
+      trades.push({...r,...sim,adjR,quality:ctx.quality,riskMult:ctx.riskMult});
+    }
+    const wins=trades.filter(t=>t.R>0).length,losses=trades.filter(t=>t.R<0).length,open=trades.filter(t=>t.outcome==="OPEN").length,missed=trades.filter(t=>t.outcome==="MISSED").length,filled=trades.filter(t=>t.entryFilled).length,closed=wins+losses,grossWin=trades.filter(t=>t.R>0).reduce((a,b)=>a+b.R,0),grossLoss=Math.abs(trades.filter(t=>t.R<0).reduce((a,b)=>a+b.R,0)),pf=grossLoss?(grossWin/grossLoss).toFixed(2):(grossWin?"∞":"-"),totalR=trades.reduce((a,b)=>a+b.R,0),adjTotalR=trades.reduce((a,b)=>a+(b.adjR||0),0),exp=trades.length?adjTotalR/trades.length:0,avgQ=trades.length?trades.reduce((a,b)=>a+(b.quality||0),0)/trades.length:0;
+    document.getElementById("backtestBox").classList.remove("hidden");
+    document.getElementById("backtestTitle").textContent=`Backtest ${days}D · ${symbol} · ${interval} · ${strategy}`;
+    document.getElementById("backtestTime").textContent=new Date().toLocaleString("vi-VN");
+    document.getElementById("btCandles").textContent=test;
+    document.getElementById("btTrades").textContent=trades.length;
+    document.getElementById("btSignalRate").textContent=`${(trades.length/test*100).toFixed(2)}%`;
+    document.getElementById("btWinrate").textContent=closed?`${(wins/closed*100).toFixed(2)}%`:"-";
+    document.getElementById("btPF").textContent=pf;
+    document.getElementById("btR").textContent=`${totalR.toFixed(2)}R`;
+    document.getElementById("btAdjR").textContent=`${adjTotalR.toFixed(2)}R`;
+    document.getElementById("btDD").textContent=`${Math.min(maxDD,adjDD).toFixed(2)}R`;
+    document.getElementById("btExp").textContent=`${exp.toFixed(2)}R`;
+    document.getElementById("btQuality").textContent=avgQ?avgQ.toFixed(0):'-';
+    document.getElementById("btMissed").textContent=missed;
+    document.getElementById("btFillRate").textContent=trades.length?`${(filled/trades.length*100).toFixed(1)}%`:'-';
+    document.getElementById("btDetail").innerHTML=`Win: <b class="text-emerald-300">${wins}</b> · Loss: <b class="text-rose-300">${losses}</b> · Open: <b class="text-amber-300">${open}</b> · Missed: <b class="text-amber-300">${missed}</b> · MTF historical: <b>${mtfBias}</b> · Backtest dùng TP1 50%, BE sau TP1, fee/slippage, adaptive risk và missed limit entry.`;
+    document.getElementById("btRankBreakdown").innerHTML=groupStats(trades,t=>t.ind.rank);
+    document.getElementById("btSetupBreakdown").innerHTML=groupStats(trades,t=>t.ind.setupType);
+  }catch(e){alert(e.message)}finally{btn.disabled=false;btn.textContent="Backtest"}
+}
+async function scanTop10(){
+  const btn=document.getElementById("scanBtn"),body=document.getElementById("heatmapBody");
+  btn.disabled=true;btn.textContent="Scanning...";
+  body.innerHTML=`<tr><td colspan="9" class="p-2 text-slate-400">Đang quét cơ hội giao dịch...</td></tr>`;
+  try{
+    const top=await fetchTopSymbols24h(),rr=+document.getElementById("rr").value,interval=document.getElementById("interval").value,strategy=document.getElementById("strategy").value,rows=[];
+    for(const x of top){
+      try{
+        const [mtfEngine,candles]=await Promise.all([getMtfEngine(x.symbol),fetchKlines(x.symbol,interval,260).then(parseKlines)]);
+        const r=analyzeSignal(candles,rr,strategy,{useMTF:true,useSession:false,mtfBias:mtfEngine.alignment,threshold:getThreshold(),mtfEngine});
+        const ms=marketStateEngine(candles);
+        const mtfExec=mtfExecutionModel(mtfEngine,r);
+        const kz=killZoneEngine();
+        const sv=sessionVolatilityModel(kz,r.ind.atrPct||0);
+        const riskMult=adaptiveRiskMultiplier({rank:r.ind.rank,mtf:mtfEngine,sessionVol:sv})*(mtfExec.decision==='REDUCE_RISK'?0.65:mtfExec.decision==='SMALL_SIZE'?0.75:1);
+        r.ind.killZone=kz.name;r.ind.sessionVol=sv.state;r.ind.adaptiveRisk=riskMult;r.ind.mtfDetail=mtfEngine.label;r.ind.marketState=ms.state;r.ind.marketAction=ms.action;
+        const q=adaptiveQualityScore(r);
+        const blocks=strengthenedNoTradeFilter(r,ms,mtfExec);
+        const opportunity=q.score+(ms.quality*0.25)+(mtfExec.score*0.25)-(blocks.length*18);
+        const exec=getExecutionStatus(candles.at(-1)?.close,r);
+        const why=[r.ind.rank,ms.state,r.ind.entryType,mtfExec.model].filter(Boolean).join(' · ');
+        rows.push({symbol:x.symbol,signal:r.signal,quality:q.score,opportunity,setup:r.ind.setupType,market:`${ms.state}`,mtf:`${mtfEngine.alignment}/${mtfExec.model}`,risk:`x${riskMult.toFixed(2)}`,exec:exec.label,execCls:exec.cls,why,blocks});
+      }catch(e){rows.push({symbol:x.symbol,signal:'ERR',quality:0,opportunity:-999,setup:'-',market:'-',mtf:'-',risk:'-',why:'-'})}
+    }
+    rows.sort((a,b)=>{
+      const rankExec=(x)=>x.exec?.includes('ENTRY')||x.exec?.includes('RUNNING')?2:x.exec?.includes('WAIT')?1:0;
+      return rankExec(b)-rankExec(a)||b.opportunity-a.opportunity;
+    });
+    lastScannerRows=rows;
+    body.innerHTML=rows.map((r,i)=>`<tr data-symbol="${r.symbol}" class="border-t border-slate-800 cursor-pointer hover:bg-slate-800/60"><td class="p-2">${i+1}</td><td class="p-2 font-bold">${r.symbol}</td><td class="p-2 ${r.signal.includes('LONG')?'text-emerald-300':r.signal.includes('SHORT')?'text-rose-300':'text-slate-400'}">${r.signal}</td><td class="p-2 font-bold ${r.quality>=80?'text-emerald-300':r.quality>=65?'text-amber-300':'text-slate-400'}">${r.quality}</td><td class="p-2">${r.setup}</td><td class="p-2">${r.market}</td><td class="p-2">${r.mtf}</td><td class="p-2">${r.risk}${r.blocks?.length?` · ${r.blocks.length} block`:''}</td><td class="p-2 ${r.execCls||'text-slate-300'} font-semibold">${r.exec||'-'}</td><td class="p-2 text-slate-400">${r.why}</td></tr>`).join('');
+    body.querySelectorAll('tr[data-symbol]').forEach(row=>row.addEventListener('click',()=>selectSymbol(row.dataset.symbol)));
+  }catch(e){body.innerHTML=`<tr><td colspan="9" class="p-2 text-rose-300">${e.message}</td></tr>`}
+  finally{btn.disabled=false;btn.textContent="Scan Opportunities"}
+}
+function saveSettings(){['symbol','interval','strategy','rr','sensitivity','accountSize','riskPct','leverage','tradeMargin','backtestInterval','backtestRange','feeModel'].forEach(id=>localStorage.setItem('dino98_'+id,document.getElementById(id)?.value??''));localStorage.setItem('dino98_mtfFilter',document.getElementById('mtfFilter').checked);localStorage.setItem('dino98_sessionFilter',document.getElementById('sessionFilter').checked)}
+function loadSettings(){['interval','strategy','rr','sensitivity','accountSize','riskPct','leverage','tradeMargin','backtestInterval','backtestRange','feeModel'].forEach(id=>{const v=localStorage.getItem('dino98_'+id);if(v&&document.getElementById(id))document.getElementById(id).value=v});['mtfFilter','sessionFilter'].forEach(id=>{const v=localStorage.getItem('dino98_'+id);if(v!==null)document.getElementById(id).checked=v==='true'});chartHidden=localStorage.getItem('dino98_chartHidden')==='true'}
+function notifyOnSignal(res){const key=`${document.getElementById('symbol').value}-${res.signal}-${res.score}`;if(res.signal.startsWith('STRONG')&&key!==lastSignalKey){lastSignalKey=key;try{new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=').play().catch(()=>{})}catch(e){}if('Notification'in window&&Notification.permission==='granted')new Notification('dino98 Strong Signal',{body:`${document.getElementById('symbol').value}: ${res.signal} ${res.score}/100`})}}
+function selectSymbol(symbol){document.getElementById('symbol').value=symbol;document.getElementById('stickySymbol').value=symbol;localStorage.setItem('dino98_symbol',symbol);latestLivePrice=null;clearLockedTradePlan();chartHasFit=false;lastChartSymbol='';lastChartInterval='';disconnectRealtimeStream();disconnectPriceStream();analyze(true)}
+function manualAnalyze(){analyze(false);if(autoUpdate){nextRefreshAt=Date.now()+REFRESH_SECONDS*1000;updateCountdown()}}
+function toggleAuto(){autoUpdate?stopAuto(true):startAuto()}
+function clearRuntimeCache({hard=false}={}){
+  if(!confirm(hard?'Hard reset toàn bộ localStorage và reload tool?':'Xóa cache runtime, execution, MTF và setup log?'))return;
+  executionStateStore={};
+  clearLockedTradePlan();
+  signalBirth={key:null,time:null};
+  window.currentMtfEngine=null;
+  mtfBiasCache='OFF';
+  lastMtfRefreshAt=0;
+  realtimeCandles=[];
+  currentAnalysisCandles=[];
+  latestLivePrice=null;
+  lastSignalKey='';
+  chartHasFit=false;
+  lastChartSymbol='';
+  lastChartInterval='';
+  if(hard){
+    localStorage.clear();
+    alert('Hard reset complete. Tool sẽ reload lại.');
+    location.reload();
+    return;
+  }
+  localStorage.removeItem('dino98_setup_log');
+  renderSetupReplay();
+  ['signalTimeOut','signalPriceOut','currentPriceOut','sinceSignalOut','executionStatus','entryProximity'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.textContent='-';
+  });
+  disconnectRealtimeStream();
+  disconnectPriceStream();
+  if(autoUpdate)startAuto();
+  analyze(true);
+  alert('Cache cleared: Execution / MTF / Realtime / Setup log đã reset.');
+}
+function disconnectRealtimeStream(){
+  if(realtimeSocket){
+    try{
+      realtimeSocket.onopen=null;
+      realtimeSocket.onmessage=null;
+      realtimeSocket.onerror=null;
+      realtimeSocket.onclose=null;
+      realtimeSocket.close();
+    }catch(e){}
+  }
+  realtimeSocket=null;
+  currentStreamKey='';
+  realtimeStatus='REST';
+}
+function disconnectPriceStream(){
+  if(priceSocket){
+    try{
+      priceSocket.onopen=null;
+      priceSocket.onmessage=null;
+      priceSocket.onerror=null;
+      priceSocket.onclose=null;
+      priceSocket.close();
+    }catch(e){}
+  }
+  priceSocket=null;
+  currentPriceStreamKey='';
+  priceStatus='REST';
+}
+function connectRealtimeStream(){
+  if(!autoUpdate)return;
+  const rawSymbol=document.getElementById('symbol').value;
+  const interval=document.getElementById('interval').value;
+  if(!rawSymbol||rawSymbol.includes('Đang')||!rawSymbol.endsWith('USDT'))return;
+  const symbol=rawSymbol.toLowerCase();
+  const streamKey=`${symbol}@kline_${interval}`;
+  if(!(realtimeSocket&&currentStreamKey===streamKey&&(realtimeSocket.readyState===WebSocket.OPEN||realtimeSocket.readyState===WebSocket.CONNECTING))){
+    disconnectRealtimeStream();
+    currentStreamKey=streamKey;
+    realtimeStatus='CONNECTING';
+    updateCountdown();
+    try{
+      realtimeSocket=new WebSocket(`${WS_BASE}/${streamKey}`);
+      realtimeSocket.onopen=()=>{realtimeStatus='WS';updateCountdown()};
+      realtimeSocket.onclose=()=>{realtimeStatus='REST';updateCountdown();currentStreamKey='';if(autoUpdate)setTimeout(()=>connectRealtimeStream(),2500)};
+      realtimeSocket.onerror=()=>{realtimeStatus='REST';updateCountdown()};
+      realtimeSocket.onmessage=(ev)=>handleRealtimeKline(ev);
+    }catch(e){realtimeStatus='REST';currentStreamKey='';updateCountdown()}
+  }
+  connectPriceStream();
+}
+function connectPriceStream(){
+  if(!autoUpdate)return;
+  const rawSymbol=document.getElementById('symbol').value;
+  if(!rawSymbol||rawSymbol.includes('Đang')||!rawSymbol.endsWith('USDT'))return;
+  const symbol=rawSymbol.toLowerCase();
+  const streamKey=`${symbol}@aggTrade`;
+  if(priceSocket&&currentPriceStreamKey===streamKey&&(priceSocket.readyState===WebSocket.OPEN||priceSocket.readyState===WebSocket.CONNECTING))return;
+  disconnectPriceStream();
+  currentPriceStreamKey=streamKey;
+  priceStatus='CONNECTING';
+  updateCountdown();
+  try{
+    priceSocket=new WebSocket(`${WS_BASE}/${streamKey}`);
+    priceSocket.onopen=()=>{priceStatus='WS';updateCountdown()};
+    priceSocket.onclose=()=>{priceStatus='REST';updateCountdown();currentPriceStreamKey='';if(autoUpdate)setTimeout(()=>connectPriceStream(),1500)};
+    priceSocket.onerror=()=>{priceStatus='REST';updateCountdown()};
+    priceSocket.onmessage=(ev)=>handleRealtimePrice(ev);
+  }catch(e){priceStatus='REST';currentPriceStreamKey='';updateCountdown()}
+}
+function getSignalKey(r){
+  const symbol=document.getElementById('symbol')?.value||'';
+  const dir=r?.signal?.includes('LONG')?'LONG':r?.signal?.includes('SHORT')?'SHORT':'WAIT';
+  const round=(v)=>Number.isFinite(v)?Number(v).toFixed(4):'0';
+  // Key chỉ dựa vào plan cốt lõi. Không dùng candle time/score để tránh reset state khi realtime cập nhật.
+  return `${symbol}|${dir}|${round(r?.entry)}|${round(r?.sl)}|${round(r?.tp1)}|${round(r?.tp2)}|${r?.ind?.entryType||''}`;
+}
+function getSignalBirthPrice(r,fallbackPrice){
+  const c=currentAnalysisCandles.at(-1)||realtimeCandles.at(-1);
+  if(c&&Number.isFinite(c.close))return c.close;
+  if(r?.tradePlan?.entryType==='FVG_PULLBACK'&&Number.isFinite(r.entry))return r.entry;
+  if(r?.ind&&Number.isFinite(r.ind.price))return r.ind.price;
+  return fallbackPrice;
+}
+function getLatestPathPrice(price){
+  const c=currentAnalysisCandles.at(-1)||realtimeCandles.at(-1);
+  if(!c)return{high:price,low:price,close:price};
+  return{high:Math.max(c.high,price),low:Math.min(c.low,price),close:price};
+}
+function cleanupExecutionStore(){
+  const now=Date.now();
+  const entries=Object.entries(executionStateStore).filter(([_,v])=>now-(v.createdAt||now)<4*60*60*1000).slice(-100);
+  executionStateStore=Object.fromEntries(entries);
+}
+function updateExecutionMemory(price,r){
+  cleanupExecutionStore();
+  if(!r||r.signal==='WAIT'||!Number.isFinite(price))return null;
+  const key=getSignalKey(r);
+  if(!executionStateStore[key]){
+    const birthPrice=getSignalBirthPrice(r,price);
+    executionStateStore[key]={
+      key,
+      state:'WAIT_ENTRY',
+      createdAt:Date.now(),
+      createdTime:new Date().toLocaleString('vi-VN'),
+      signalPrice:birthPrice,
+      signalCandleTime:currentAnalysisCandles.at(-1)?.time||realtimeCandles.at(-1)?.time||null,
+      entry:r.entry,
+      sl:r.sl,
+      tp1:r.tp1,
+      tp2:r.tp2,
+      entryTouched:false,
+      tp1Touched:false,
+      tp2Touched:false,
+      invalidated:false,
+      missed:false,
+      firstEntryAt:null,
+      firstTp1At:null,
+      firstTp2At:null,
+      invalidatedAt:null
+    };
+  }
+  const s=executionStateStore[key];
+  const path=getLatestPathPrice(price);
+  const isLong=r.signal.includes('LONG');
+  const now=Date.now();
+
+  if(isLong){
+    const entryHit=s.signalPrice<=s.entry||path.low<=s.entry;
+    const tp1Hit=s.signalPrice>=s.tp1||path.high>=s.tp1;
+    const tp2Hit=s.signalPrice>=s.tp2||path.high>=s.tp2;
+    const slHit=s.signalPrice<=s.sl||path.low<=s.sl;
+
+    // Với limit/pullback plan: TP chỉ hợp lệ sau khi Entry đã từng được chạm.
+    if(!s.entryTouched&&entryHit){s.entryTouched=true;s.firstEntryAt=now;}
+    if(!s.entryTouched&&(tp1Hit||tp2Hit)){s.missed=true;}
+    if(s.entryTouched&&!s.tp1Touched&&tp1Hit){s.tp1Touched=true;s.firstTp1At=now;}
+    if(s.entryTouched&&!s.tp2Touched&&tp2Hit){s.tp2Touched=true;s.firstTp2At=now;}
+    if(!s.invalidated&&slHit){s.invalidated=true;s.invalidatedAt=now;}
+  }else{
+    const entryHit=s.signalPrice>=s.entry||path.high>=s.entry;
+    const tp1Hit=s.signalPrice<=s.tp1||path.low<=s.tp1;
+    const tp2Hit=s.signalPrice<=s.tp2||path.low<=s.tp2;
+    const slHit=s.signalPrice>=s.sl||path.high>=s.sl;
+
+    // Với limit/pullback plan: TP chỉ hợp lệ sau khi Entry đã từng được chạm.
+    if(!s.entryTouched&&entryHit){s.entryTouched=true;s.firstEntryAt=now;}
+    if(!s.entryTouched&&(tp1Hit||tp2Hit)){s.missed=true;}
+    if(s.entryTouched&&!s.tp1Touched&&tp1Hit){s.tp1Touched=true;s.firstTp1At=now;}
+    if(s.entryTouched&&!s.tp2Touched&&tp2Hit){s.tp2Touched=true;s.firstTp2At=now;}
+    if(!s.invalidated&&slHit){s.invalidated=true;s.invalidatedAt=now;}
+  }
+
+  if(s.invalidated)s.state='INVALIDATED';
+  else if(s.entryTouched&&s.tp2Touched)s.state='TP2_DONE';
+  else if(s.entryTouched&&s.tp1Touched)s.state='TP1_HIT';
+  else if(s.entryTouched)s.state='ENTRY_FILLED';
+  else if(s.missed)s.state='MISSED_ENTRY';
+  else s.state='WAIT_ENTRY';
+
+  return s;
+}
+function getExecutionStatus(price,r){
+  if(!r||r.signal==='WAIT'||!Number.isFinite(price))return{label:'NO TRADE',cls:'text-slate-400',note:'Chưa có tín hiệu hợp lệ',snap:null};
+  const snap=updateExecutionMemory(price,r);
+  if(!snap)return{label:'NO TRADE',cls:'text-slate-400',note:'Chưa có dữ liệu snapshot',snap:null};
+  if(!snap.entryTouched&&isStaleLimitPlan(r,price)){
+    snap.state='STALE_PLAN';
+    snap.missed=true;
+    return{label:'STALE PLAN',cls:'text-rose-300',note:'Kế hoạch lỗi thời: giá đã đi qua vùng TP trước khi khớp Entry. Không vào lệnh.',snap};
+  }
+  const isLong=r.signal.includes('LONG');
+  let label='WAIT_ENTRY',cls='text-cyan-300',note='Đang chờ giá chạm Entry';
+  if(snap.state==='INVALIDATED'){label='INVALIDATED';cls='text-rose-300';note='Setup đã chạm/vượt SL'}
+  else if(snap.state==='TP2_DONE'){label='TP2 DONE';cls='text-emerald-300';note='Move đã tới TP2, không chase'}
+  else if(snap.state==='TP1_HIT'){label='TP1 HIT / MANAGE';cls='text-emerald-300';note='Đã chạm Entry và TP1, quản lý lệnh/BE'}
+  else if(snap.state==='ENTRY_FILLED'){
+    const runningToTp=isLong?price>r.entry:price<r.entry;
+    label=runningToTp?'RUNNING TO TP':'ENTRY FILLED';
+    cls='text-emerald-300';
+    note=runningToTp?'Đã khớp Entry và đang đi đúng hướng':'Đã chạm Entry, đang quanh vùng vào lệnh';
+  }
+  else if(snap.state==='MISSED_ENTRY'){label='MISSED ENTRY';cls='text-amber-300';note='Giá tới TP1 trước khi chạm Entry, không chase'}
+  else if(snap.state==='WAIT_ENTRY'){
+    label='WAIT ENTRY';cls='text-cyan-300';
+    note=isLong?'Chờ giá hồi xuống Entry':'Chờ giá hồi lên Entry';
+  }
+  return{label,cls,note,snap};
+}
+function updateExecutionStatus(price){
+  const statusEl=document.getElementById('executionStatus');
+  const noteEl=document.getElementById('planNote');
+  const pathEl=document.getElementById('entryPathOut');
+  const r=lastOrderPlan;
+  if(!statusEl)return;
+
+  const s=getExecutionStatus(price,r);
+  statusEl.textContent=s.label;
+  statusEl.className=`font-bold mt-1 ${s.cls}`;
+
+  if(noteEl&&r&&r.signal!=='WAIT'){
+    const base=r.tradePlan?.note||'';
+    noteEl.textContent=`${s.note} · ${base}`;
+    noteEl.title=`${s.note} · ${base}`;
+  }
+
+  const snap=s.snap;
+  if(snap){
+    const ageSec=Math.max(0,Math.floor((Date.now()-snap.createdAt)/1000));
+    const t1=document.getElementById('signalTimeOut');
+    const t2=document.getElementById('signalPriceOut');
+    const t3=document.getElementById('currentPriceOut');
+    const t4=document.getElementById('sinceSignalOut');
+    if(t1)t1.textContent=snap.createdTime;
+    if(t2)t2.textContent=fmt(snap.signalPrice);
+    if(t3)t3.textContent=fmt(price);
+    if(t4)t4.textContent=ageSec<60?`${ageSec}s`:`${Math.floor(ageSec/60)}m ${ageSec%60}s`;
+  }
+
+  if(pathEl&&r&&r.signal!=='WAIT'){
+    const distToEntryPct=Math.abs(price-r.entry)/r.entry*100;
+    const distToEntryR=Math.abs(price-r.entry)/Math.max(0.0000001,r.ind.risk||1);
+    let label='-',cls='text-slate-300';
+
+    if(s.label==='INVALIDATED'){
+      label='Đã mất hiệu lực / chạm SL';cls='text-rose-300';
+    }else if(s.label==='TP2 DONE'){
+      label='Đã qua Entry → TP2';cls='text-emerald-300';
+    }else if(s.label==='TP1 HIT / MANAGE'){
+      label='Đã qua Entry → TP1';cls='text-emerald-300';
+    }else if(s.label==='RUNNING TO TP'){
+      label='Đã chạm Entry → đang chạy về TP';cls='text-emerald-300';
+    }else if(s.label==='ENTRY FILLED'){
+      label='Đã chạm Entry, đang quanh vùng vào';cls='text-emerald-300';
+    }else if(s.label==='STALE PLAN'){
+      label='Plan lỗi thời: giá đã qua vùng TP trước khi khớp Entry';cls='text-rose-300';
+    }else if(s.label==='MISSED ENTRY'){
+      label='Chưa khớp Entry, giá đã chạy qua target';cls='text-amber-300';
+    }else if(s.label==='WAIT ENTRY'){
+      label=r.signal.includes('SHORT')?'Chưa chạm Entry, chờ hồi lên':'Chưa chạm Entry, chờ hồi xuống';cls='text-cyan-300';
+    }else{
+      label=s.note||s.label;
+      cls=s.cls||'text-slate-300';
+    }
+
+    pathEl.textContent=`${label} · ${distToEntryPct.toFixed(2)}% / ${distToEntryR.toFixed(2)}R`;
+    pathEl.className=`font-semibold mt-1 ${cls}`;
+  }
+}
+function updateEntryProximity(price){
+  const el=document.getElementById('entryProximity');
+  const r=lastOrderPlan;
+  if(!el||!r||r.signal==='WAIT'||!r.entry){if(el)el.textContent='-';return}
+  const distPct=Math.abs(price-r.entry)/r.entry*100;
+  const distR=Math.abs(price-r.entry)/Math.max(0.0000001,r.ind.risk||1);
+  const tooFar=distR>0.75;
+  updateExecutionStatus(price);
+  el.textContent=`${distPct.toFixed(2)}% · ${distR.toFixed(2)}R${tooFar?' ⚠':''}`;
+  el.className=`font-semibold mt-1 ${tooFar?'text-amber-300':'text-slate-200'}`;
+}
+function handleRealtimePrice(ev){
+  try{
+    const msg=JSON.parse(ev.data);
+    const p=Number(msg.p);
+    if(!Number.isFinite(p))return;
+    latestLivePrice=p;
+    document.getElementById('price').textContent=fmt(p);
+    updateEntryProximity(p);
+    const r=lastOrderPlan;
+    if(r&&r.signal!=='WAIT'){
+      const side=r.signal.includes('LONG')?'LONG':'SHORT';
+      const moveR=side==='LONG'?(p-r.entry)/Math.max(0.0000001,r.ind.risk):(r.entry-p)/Math.max(0.0000001,r.ind.risk);
+      const mini=document.getElementById('stickySignalMini');
+      if(mini)mini.textContent=`${r.signal} · ${r.score} · ${moveR.toFixed(2)}R`;
+    }
+  }catch(e){}
+}
+function handleRealtimeKline(ev){try{const msg=JSON.parse(ev.data);const k=msg.k;if(!k)return;const liveClose=latestLivePrice||+k.c;const candle={time:Math.floor(k.t/1000),open:+k.o,high:Math.max(+k.h,liveClose),low:Math.min(+k.l,liveClose),close:liveClose,volume:+k.v};const last=realtimeCandles.at(-1);if(last&&last.time===candle.time)realtimeCandles[realtimeCandles.length-1]=candle;else realtimeCandles.push(candle);if(realtimeCandles.length>300)realtimeCandles=realtimeCandles.slice(-300);currentAnalysisCandles=realtimeCandles;const now=Date.now();if(now-lastRealtimeRender<500)return;lastRealtimeRender=now;const rr=+document.getElementById('rr').value,strategy=document.getElementById('strategy').value,useMTF=document.getElementById('mtfFilter').checked,useSession=document.getElementById('sessionFilter').checked,threshold=getThreshold();const mtfEngine=window.currentMtfEngine||null;const freshRes=analyzeSignal(realtimeCandles,rr,strategy,{useMTF,useSession,mtfBias:mtfBiasCache,threshold,mtfEngine});const res=resolveTradePlanLock(freshRes,true,latestLivePrice||freshRes.ind.price);renderChart(realtimeCandles,res.series,res,{forceFit:false});setUI(res,rr);renderPhase2Context(res,mtfEngine);renderPhase3Context(res);document.getElementById('lastUpdate').textContent=`${document.getElementById('symbol').value} · realtime · ${new Date().toLocaleTimeString('vi-VN')}`}catch(e){console.log(e)}}
+function toggleChartLayout(){chartHidden=!chartHidden;if(chartHidden){document.getElementById('chartPanel').classList.add('hidden');document.getElementById('signalPanel').classList.remove('xl:col-span-8','2xl:col-span-8');document.getElementById('signalPanel').classList.add('xl:col-span-12','2xl:col-span-12');document.getElementById('toggleChartBtn').textContent='Show Chart'}else{document.getElementById('chartPanel').classList.remove('hidden');document.getElementById('signalPanel').classList.remove('xl:col-span-12','2xl:col-span-12');document.getElementById('signalPanel').classList.add('xl:col-span-8','2xl:col-span-8');document.getElementById('toggleChartBtn').textContent='Hide Chart';setTimeout(resizeChart,320)}localStorage.setItem('dino98_chartHidden',chartHidden)}
+window.addEventListener('resize',resizeChart);initChart();loadSettings();document.getElementById('toggleChartBtn').addEventListener('click',toggleChartLayout);document.getElementById('clearCacheBtn').addEventListener('click',(e)=>clearRuntimeCache({hard:e.shiftKey}));document.getElementById('clearSetupLogBtn').addEventListener('click',()=>{localStorage.removeItem('dino98_setup_log');renderSetupReplay()});document.getElementById('analyzeBtn').addEventListener('click',manualAnalyze);document.getElementById('stickyAnalyzeBtn').addEventListener('click',manualAnalyze);document.getElementById('autoBtn').addEventListener('click',toggleAuto);document.getElementById('stickyAutoBtn').addEventListener('click',toggleAuto);document.getElementById('backtestBtn').addEventListener('click',runBacktest24h);document.getElementById('scanBtn').addEventListener('click',scanTop10);document.getElementById('analyzeBestBtn').addEventListener('click',()=>{const best=lastScannerRows.find(x=>!x.blocks?.length&&x.signal!=='WAIT'&&x.signal!=='ERR')||lastScannerRows[0];if(best?.symbol)selectSymbol(best.symbol);});['accountSize','riskPct'].forEach(id=>document.getElementById(id).addEventListener('input',()=>{saveSettings();updateOrderTicket()}));['leverage','tradeMargin','interval','strategy','rr','sensitivity','backtestInterval','backtestRange','feeModel','mtfFilter','sessionFilter'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{saveSettings();if(['interval','strategy','rr','sensitivity','mtfFilter','sessionFilter'].includes(id))analyze(true);else updateOrderTicket()}));document.getElementById('copyPlanBtn').addEventListener('click',()=>copyText(orderPlanText()));document.getElementById('copyPricesBtn').addEventListener('click',()=>{const r=lastOrderPlan;if(!r||r.signal==='WAIT')return alert('Chưa có tín hiệu hợp lệ.');copyText(`Entry ${fmt(r.entry)} | SL ${fmt(r.sl)} | TP1 ${fmt(r.tp1)} | TP2 ${fmt(r.tp2)}`)});document.getElementById('openBinanceBtn').addEventListener('click',()=>window.open(`https://www.binance.com/en/futures/${document.getElementById('symbol').value}`,'_blank'));document.getElementById('symbol').addEventListener('change',()=>selectSymbol(document.getElementById('symbol').value));document.getElementById('stickySymbol').addEventListener('change',()=>selectSymbol(document.getElementById('stickySymbol').value));if('Notification'in window&&Notification.permission==='default')Notification.requestPermission().catch(()=>{});loadTopSymbols().then(()=>{if(chartHidden)toggleChartLayout();startAuto();analyze(true);renderSetupReplay()});setInterval(loadTopSymbols,10*60*1000);
+</script>
+</body>
+</html>
