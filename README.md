@@ -9,7 +9,7 @@ A lightweight HTML-only crypto futures decision-support dashboard for market ana
 
 ## Live Demo
 
-https://dino6298.github.io/btcanalyzer/
+[https://dino6298.github.io/btcanalyzer/](https://dino6298.github.io/btcanalyzerdino/)
 
 ---
 
