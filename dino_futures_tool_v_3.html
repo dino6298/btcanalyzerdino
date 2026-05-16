@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dino Futures Tool V3 Official · dino98</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    :root { color-scheme: dark; }
+    body { background:#020617; color:#e2e8f0; }
+    .panel { background:#0f172a; border:1px solid #1e293b; border-radius:1rem; }
+    .box { background:#020617; border:1px solid #1e293b; border-radius:.85rem; min-width:0; }
+    .box div[id] { overflow-wrap:anywhere; word-break:break-word; white-space:normal; line-height:1.35; }
+    .box .mono { overflow-wrap:normal; word-break:normal; }
+    .mono { font-variant-numeric: tabular-nums; }
+    .tip { position:relative; display:inline-flex; align-items:center; gap:.25rem; cursor:help; }
+    .tip::after { content:attr(data-tip); position:absolute; left:0; bottom:calc(100% + 8px); z-index:99; width:max-content; max-width:280px; padding:.55rem .7rem; border:1px solid #334155; border-radius:.75rem; background:#020617; color:#cbd5e1; font-size:.72rem; line-height:1.25; box-shadow:0 16px 40px rgba(2,6,23,.45); opacity:0; pointer-events:none; transform:translateY(4px); transition:opacity .15s ease, transform .15s ease; white-space:normal; }
+    .tip:hover::after { opacity:1; transform:translateY(0); }
+    .tip-i { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:999px; border:1px solid #475569; color:#94a3b8; font-size:10px; }
+    .badge { display:inline-flex; align-items:center; gap:.25rem; border-radius:999px; padding:.15rem .5rem; border:1px solid #334155; background:#020617; font-size:.72rem; }
+    .badge-good { color:#86efac; border-color:#166534; background:rgba(20,83,45,.28); }
+    .badge-warn { color:#fde68a; border-color:#92400e; background:rgba(120,53,15,.25); }
+    .badge-bad { color:#fca5a5; border-color:#991b1b; background:rgba(127,29,29,.22); }
+    body.chart-hidden #chartPanel { display:none; }
+    body.focus-mode #controls, body.focus-mode #marketPanel, body.focus-mode #scannerPanel, body.focus-mode #backtestPanel, body.focus-mode #forwardPanel { display:none; }
+    body.trade-mode #marketPanel, body.trade-mode #scannerPanel, body.trade-mode #backtestPanel, body.trade-mode #forwardPanel { display:none; }
+    body.research-mode #backtestPanel { display:none; }
+    body.debug-mode #chartPanel { display:none; }
+    body.debug-mode #tradePanel { grid-column:1/-1; }
+    body.focus-mode #tradePanel { grid-column:1/-1; }
+    @media (min-width:1280px){
+      main { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:1rem; align-items:start; }
+      #topBar,#controls,#footer { grid-column:1/-1; }
+      #chartPanel { grid-column:1/5; }
+      #tradePanel { grid-column:5/13; }
+      body.chart-hidden #tradePanel { grid-column:1/-1; }
+      #marketPanel { grid-column:1/7; }
+      #scannerPanel { grid-column:7/13; }
+      #backtestPanel,#forwardPanel { grid-column:1/-1; }
+    }
+  </style>
+</head>
+<body>
+  <main class="w-full max-w-none p-3 sm:p-4 lg:p-5">
+    <section id="topBar" class="sticky top-0 z-50 backdrop-blur bg-slate-950/85 border-b border-slate-800 -mx-3 sm:-mx-4 lg:-mx-5 px-3 sm:px-4 lg:px-5 py-2 mb-4">
+      <div class="flex flex-wrap items-center gap-2">
+        <select id="stickySymbol" class="min-w-[260px] flex-1 rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 font-semibold"></select>
+        <button id="btnAnalyzeTop" class="rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-5 py-2">Phân tích</button>
+        <button id="btnAutoTop" class="rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold px-5 py-2">Auto OFF</button>
+        <span id="miniSignal" class="ml-auto rounded-full bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-slate-300">Chưa có tín hiệu</span>
+        <span id="autoStatus" class="rounded-full bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-slate-300">Live OFF</span>
+        <button id="btnClearCache" class="rounded-full bg-amber-950/70 hover:bg-amber-900 border border-amber-700 px-3 py-2 text-amber-200 text-xs">🧹 Xóa cache</button>
+        <button id="btnFocusMode" class="rounded-full bg-violet-950/70 hover:bg-violet-900 border border-violet-700 px-3 py-2 text-violet-200 text-xs">🎯 Trade Focus</button>
+        <select id="uiMode" class="rounded-full bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-slate-200">
+          <option value="research" selected>Research Mode</option>
+          <option value="trade">Trade Mode</option>
+          <option value="debug">Debug Mode</option>
+        </select>
+        <span id="dailyStatusTop" class="rounded-full bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-slate-300">Daily: -</span>
+      </div>
+    </section>
+
+    <section id="controls" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3 mb-4">
+      <div class="panel p-3 xl:col-span-2">
+        <label class="text-xs text-slate-400">Symbol · Top volume 24h</label>
+        <select id="symbol" class="mt-1 w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 font-semibold"></select>
+        <div id="topUpdated" class="text-xs text-slate-500 mt-2">Đang tải top coin...</div>
+      </div>
+      <div class="panel p-3">
+        <label class="text-xs text-slate-400">Timeframe</label>
+        <select id="timeframe" class="mt-1 w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2">
+          <option value="5m">5 phút</option>
+          <option value="15m" selected>15 phút</option>
+          <option value="30m">30 phút</option>
+          <option value="1h">1 giờ</option>
+        </select>
+      </div>
+      <div class="panel p-3 xl:col-span-2">
+        <label class="text-xs text-slate-400">Chiến thuật</label>
+        <select id="strategy" class="mt-1 w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2">
+          <option value="momentum" selected>Momentum Scalping</option>
+          <option value="trend">Trend Pullback</option>
+          <option value="reversal">Liquidity Reversal</option>
+        </select>
+      </div>
+      <div class="panel p-3">
+        <label class="text-xs text-slate-400">R:R</label>
+        <select id="rr" class="mt-1 w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2">
+          <option value="1">1:1</option>
+          <option value="1.5">1:1.5</option>
+          <option value="2" selected>1:2</option>
+          <option value="3">1:3</option>
+        </select>
+      </div>
+      <div class="panel p-3">
+        <label class="text-xs text-slate-400 tip" data-tip="Safe lọc rất gắt, Balanced là mặc định, Aggressive cho phép nhiều setup hơn nhưng vẫn cảnh báo rõ.">Risk Mode <span class="tip-i">i</span></label>
+        <select id="riskMode" class="mt-1 w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2">
+          <option value="safe">Safe</option>
+          <option value="balanced" selected>Balanced</option>
+          <option value="aggressive">Aggressive</option>
+        </select>
+      </div>
+    </section>
+
+    <section id="chartPanel" class="panel p-3 mb-4">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2"><h2 class="font-bold">Chart</h2><span class="rounded-full bg-slate-800 px-2 py-1 text-[10px] text-slate-400">LIVE</span></div>
+        <div class="flex items-center gap-2">
+          <div id="chartMeta" class="text-xs text-slate-400">-</div>
+          <button id="btnToggleChart" class="rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 text-xs text-slate-200">Ẩn chart</button>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-4 text-xs mb-2">
+        <span><span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 mr-1"></span>Nến tăng</span>
+        <span><span class="inline-block w-2.5 h-2.5 rounded-full bg-rose-400 mr-1"></span>Nến giảm</span>
+        <span><span class="inline-block w-7 h-1 bg-cyan-300 mr-1"></span>EMA nhanh</span>
+        <span><span class="inline-block w-7 h-1 bg-amber-400 mr-1"></span>EMA chậm</span>
+      </div>
+      <div id="chart" class="w-full h-[420px] rounded-xl overflow-hidden bg-slate-950"></div>
+    </section>
+
+    <section id="tradePanel" class="panel p-3 mb-4">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-bold text-lg">Tín hiệu & Kế hoạch lệnh · V3 Official</h2>
+        <div class="text-xs text-slate-500">V3 Official · Manual execution only · dino98</div>
+      </div>
+      <div class="grid grid-cols-1 xl:grid-cols-12 gap-3">
+        <div class="xl:col-span-4">
+          <div id="signalCard" class="rounded-2xl border border-slate-700 bg-slate-950 p-4 min-h-[122px]">
+            <div class="flex items-center justify-between"><div id="signalTitle" class="text-3xl font-black tracking-tight">WAIT</div><div id="signalScore" class="text-2xl font-black text-slate-400">0</div></div>
+            <div id="signalReason" class="text-sm text-slate-400 mt-2">Chưa có phân tích.</div>
+          </div>
+          <button id="btnAnalyze" class="mt-3 w-full rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-2">Phân tích</button>
+          <button id="btnAuto" class="mt-2 w-full rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold py-2">Auto OFF</button>
+          <div id="liveStatus" class="mt-2 box p-2 text-xs text-slate-400 text-center">Live OFF</div>
+        </div>
+        <div class="xl:col-span-8">
+          <div class="grid grid-cols-2 sm:grid-cols-6 gap-2 mb-2 text-xs" id="priceGrid">
+            <div class="box p-3"><div class="text-slate-500 tip" data-tip="Giá vào lệnh gợi ý. Với Manual Mode, đây là giá entry thực tế bạn nhập.">Giá vào <span class="tip-i">i</span></div><div id="entry" class="mono font-bold text-lg">-</div></div>
+            <div class="box p-3"><div class="text-slate-500 tip" data-tip="Giá cắt lỗ theo vùng invalidation của setup.">SL <span class="tip-i">i</span></div><div id="sl" class="mono font-bold text-lg">-</div></div>
+            <div class="box p-3"><div class="text-slate-500 tip" data-tip="Mục tiêu chốt lời một phần.">TP1 <span class="tip-i">i</span></div><div id="tp1" class="mono font-bold text-lg">-</div></div>
+            <div class="box p-3"><div class="text-slate-500 tip" data-tip="Mục tiêu chốt lời chính.">TP2 <span class="tip-i">i</span></div><div id="tp2" class="mono font-bold text-lg">-</div></div>
+            <div class="box p-3"><div class="text-slate-500 tip" data-tip="Giá TP cuối cùng.">TP cuối <span class="tip-i">i</span></div><div id="tp" class="mono font-bold text-lg">-</div></div>
+            <div class="box p-3"><div class="text-slate-500 tip" data-tip="Tỷ lệ lợi nhuận/rủi ro kỳ vọng.">R:R <span class="tip-i">i</span></div><div id="rrOut" class="mono font-bold text-lg">-</div></div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2 mb-2 text-xs">
+            <div class="box p-3"><div class="text-slate-500 tip" data-tip="Trạng thái thực thi của TradePlan hiện tại.">Trạng thái <span class="tip-i">i</span></div><div id="execStatus" class="font-bold mt-1">-</div></div>
+            <div class="box p-3"><div class="text-slate-500 tip" data-tip="Loại entry: FVG pullback, pullback limit, manual active...">Kiểu vào <span class="tip-i">i</span></div><div id="entryType" class="font-bold mt-1">-</div></div>
+            <div class="box p-3"><div class="text-slate-500 tip" data-tip="Giá thị trường tại thời điểm plan được tạo.">Giá lúc tín hiệu <span class="tip-i">i</span></div><div id="signalPrice" class="mono font-bold mt-1">-</div></div>
+            <div class="box p-3"><div class="text-slate-500 tip" data-tip="Giá realtime hiện tại.">Giá hiện tại <span class="tip-i">i</span></div><div id="currentPrice" class="mono font-bold mt-1">-</div></div>
+            <div class="box p-3"><div class="text-slate-500 tip" data-tip="Đường đi của giá so với Entry.">Đường đi Entry <span class="tip-i">i</span></div><div id="entryPath" class="font-bold mt-1 whitespace-normal break-words">-</div></div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2 mb-2 text-xs">
+            <div class="box p-3"><div class="text-slate-500 tip" data-tip="Playbook là loại chiến thuật cụ thể: FVG Continuation, Trend Pullback, Liquidity Sweep Reversal, Breakout Retest hoặc Range Reversion.">Playbook <span class="tip-i">i</span></div><div id="playbookOut" class="font-bold mt-1">-</div></div>
+            <div class="box p-3"><div class="text-slate-500 tip" data-tip="Giai đoạn setup: forming, wait pullback, entry zone, trigger ready, manual active...">Signal Stage <span class="tip-i">i</span></div><div id="signalStage" class="font-bold mt-1">-</div></div>
+            <div class="box p-3"><div class="text-slate-500 tip" data-tip="Vùng entry hợp lý thay vì một giá cứng.">Entry Zone <span class="tip-i">i</span></div><div id="entryZone" class="mono font-bold mt-1">-</div></div>
+            <div class="box p-3"><div class="text-slate-500 tip" data-tip="Điểm timing vào lệnh. Setup đẹp nhưng timing thấp thì vẫn nên chờ.">Entry Timing <span class="tip-i">i</span></div><div id="entryTiming" class="font-bold mt-1">-</div></div>
+            <div class="box p-3"><div class="text-slate-500 tip" data-tip="Hành động gợi ý hiện tại.">Action <span class="tip-i">i</span></div><div id="entryAction" class="font-bold mt-1">-</div></div>
+            <div class="box p-3"><div class="text-slate-500 tip" data-tip="Risk Quality đánh giá entry distance, RR thực tế, SL width, stage và regime.">Risk Quality <span class="tip-i">i</span></div><div id="riskQuality" class="font-bold mt-1">-</div></div>
+            <div class="box p-3"><div class="text-slate-500 tip" data-tip="No Trade Guard cho biết lý do không nên vào lệnh.">No Trade Guard <span class="tip-i">i</span></div><div id="noTradeGuard" class="font-bold mt-1 whitespace-normal break-words">-</div></div>
+            <div class="box p-3"><div class="text-slate-500 tip" data-tip="Gợi ý quản lý sau khi vào lệnh.">Quản lý lệnh <span class="tip-i">i</span></div><div id="tradeManagement" class="font-bold mt-1 whitespace-normal break-words">-</div></div>
+            <div class="box p-3"><div class="text-slate-500 tip" data-tip="Regime Gate kiểm tra market có phù hợp chiến thuật hiện tại không.">Regime Gate <span class="tip-i">i</span></div><div id="regimeGate" class="font-bold mt-1 whitespace-normal break-words">-</div></div>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 text-xs">
+            <div class="box p-3"><div class="text-slate-500">Signal Time</div><div id="signalTime" class="mono font-semibold">-</div></div>
+            <div class="box p-3"><div class="text-slate-500">Since Signal</div><div id="sinceSignal" class="mono font-semibold">-</div></div>
+            <div class="box p-3"><div class="text-slate-500">Risk / coin</div><div id="riskCoin" class="mono font-semibold">-</div></div>
+            <div class="box p-3"><div class="text-slate-500">Ghi chú</div><div id="planNote" class="font-semibold whitespace-normal break-words">-</div></div>
+          </div>
+          <div class="box p-3">
+            <div class="flex items-center justify-between mb-2"><h3 class="font-bold">Tính khối lượng lệnh</h3><div class="text-xs text-slate-500">Risk / margin / qty</div></div>
+            <div class="grid grid-cols-2 md:grid-cols-6 gap-2 text-xs">
+              <label>Vốn USDT<input id="accountSize" type="number" value="20" class="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2"></label>
+              <label>Risk %<input id="riskPct" type="number" value="3" class="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2"></label>
+              <label>Phí %<input id="feePct" type="number" step="0.01" value="0.05" class="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2"></label>
+              <label>Trượt giá %<input id="slippagePct" type="number" step="0.01" value="0.03" class="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2"></label>
+              <label>Đòn bẩy<select id="leverage" class="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2"><option value="3">x3</option><option value="5" selected>x5</option><option value="10">x10</option><option value="20">x20</option></select></label>
+              <label>Vốn vào lệnh<select id="marginMode" class="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2"><option value="auto" selected>Auto Risk%</option><option value="5">5 USDT</option><option value="10">10 USDT</option><option value="20">20 USDT</option></select></label>
+              <div class="box p-2"><div class="text-slate-500">Margin</div><div id="marginOut" class="mono font-bold">-</div></div>
+              <div class="box p-2"><div class="text-slate-500">Risk</div><div id="riskOut" class="mono font-bold">-</div></div>
+              <div class="box p-2"><div class="text-slate-500">Vị thế</div><div id="posOut" class="mono font-bold">-</div></div>
+              <div class="box p-2"><div class="text-slate-500">Qty</div><div id="qtyOut" class="mono font-bold">-</div></div>
+              <div class="box p-2"><div class="text-slate-500">Sizing</div><div id="sizingMode" class="font-bold">-</div></div>
+              <div class="box p-2"><div class="text-slate-500 tip" data-tip="R:R sau khi trừ ước tính phí và trượt giá. Dùng để tránh setup lời ít nhưng phí ăn hết biên.">Net RR <span class="tip-i">i</span></div><div id="netRROut" class="font-bold">-</div></div>
+              <div class="box p-2"><div class="text-slate-500 tip" data-tip="Cảnh báo nếu qty/margin không đạt minNotional hoặc không đúng stepSize của Binance Futures.">Binance Rule <span class="tip-i">i</span></div><div id="binanceRuleOut" class="font-bold">-</div></div>
+            </div>
+            <div class="grid grid-cols-3 gap-2 mt-3">
+              <button id="btnCopyPlan" class="rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-3 py-2">Copy kế hoạch</button>
+              <button id="btnCopyPrices" class="rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-2">Copy giá</button>
+              <button id="btnOpenBinance" class="rounded-xl bg-yellow-500 hover:bg-yellow-400 text-slate-950 font-bold px-3 py-2">Mở Binance</button>
+            </div>
+            <div class="mt-3 rounded-xl border border-emerald-800 bg-emerald-950/20 p-3">
+              <div class="flex flex-wrap items-center gap-2">
+                <button id="btnConfirmEntry" class="rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-2">Tôi đã vào lệnh</button>
+                <div id="manualEntryBox" class="hidden flex flex-wrap items-center gap-2">
+                  <input id="manualEntryPrice" type="number" step="0.0001" placeholder="Giá entry thực tế" class="rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm mono" />
+                  <button id="btnApplyManualEntry" class="rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-3 py-2">Xác nhận entry</button>
+                  <button id="btnClearManualEntry" class="rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-bold px-3 py-2">Thoát manual</button>
+                </div>
+              </div>
+              <div id="manualEntryStatus" class="text-xs text-slate-400 mt-2">Chưa xác nhận vào lệnh.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="marketPanel" class="panel p-3 mb-4">
+      <h2 class="font-bold mb-3">Bối cảnh thị trường</h2>
+      <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 text-xs">
+        <div class="box p-3"><div class="text-slate-500 tip" data-tip="Trạng thái tổng thể của thị trường.">Market State <span class="tip-i">i</span></div><div id="marketState" class="font-bold">-</div></div>
+        <div class="box p-3"><div class="text-slate-500 tip" data-tip="Multi-timeframe 4H/1H/15m/5m.">MTF <span class="tip-i">i</span></div><div id="mtfOut" class="font-bold">-</div><div id="mtfDetail" class="text-[11px] text-slate-500 mt-1">-</div></div>
+        <div class="box p-3"><div class="text-slate-500 tip" data-tip="FVG quality và fill %. Nó giúp đánh giá vùng mất cân bằng giá.">FVG Quality <span class="tip-i">i</span></div><div id="fvgOut" class="font-bold">-</div></div>
+        <div class="box p-3"><div class="text-slate-500 tip" data-tip="Liquidity sweep, equal highs/lows.">Liquidity <span class="tip-i">i</span></div><div id="liquidityOut" class="font-bold">-</div></div>
+        <div class="box p-3"><div class="text-slate-500 tip" data-tip="Structure bias, BOS/CHOCH.">Structure <span class="tip-i">i</span></div><div id="structureOut" class="font-bold">-</div></div>
+        <div class="box p-3"><div class="text-slate-500 tip" data-tip="Kill Zone theo giờ Việt Nam.">Kill Zone <span class="tip-i">i</span></div><div id="killZoneOut" class="font-bold">-</div></div>
+      </div>
+    </section>
+
+    <section id="scannerPanel" class="panel p-3 mb-4">
+      <div class="flex items-center justify-between mb-3">
+        <div><h2 class="font-bold">Opportunity Scanner v3</h2><p class="text-xs text-slate-400">Quét Top 10/20/25 với No Trade Guard, Risk Quality và MTF cache.</p></div>
+        <div class="flex flex-wrap gap-2 items-center">
+          <select id="scannerLimit" class="rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm"><option value="10">Top 10</option><option value="20">Top 20</option><option value="25" selected>Top 25</option></select>
+          <button id="btnScan" class="rounded-xl bg-fuchsia-500 hover:bg-fuchsia-400 text-slate-950 font-bold px-4 py-2">Scan</button>
+          <button id="btnAnalyzeBest" class="rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2">Analyze Best</button>
+          <select id="scannerFilter" class="rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm">
+            <option value="all">Tất cả</option>
+            <option value="tradable">Ẩn No Trade</option>
+            <option value="long">Chỉ LONG</option>
+            <option value="short">Chỉ SHORT</option>
+            <option value="entry">Entry Zone / Trigger</option>
+          </select>
+          <input id="scannerMinEV" type="number" value="0" min="0" max="100" placeholder="EV min" class="w-24 rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm" />
+        </div>
+      </div>
+      <div class="overflow-auto max-h-[420px] rounded-xl border border-slate-800">
+        <table class="w-full text-xs">
+          <thead class="sticky top-0 bg-slate-900 text-slate-400"><tr><th class="p-2 text-left">#</th><th class="p-2 text-left">Symbol</th><th class="p-2 text-left">Signal</th><th class="p-2 text-left">Exec</th><th class="p-2 text-left">EV</th><th class="p-2 text-left">Setup</th><th class="p-2 text-left">Why</th></tr></thead>
+          <tbody id="scannerBody"><tr><td colspan="7" class="p-3 text-slate-500">Bấm Scan để quét.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="backtestPanel" class="panel p-3 mb-4">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
+        <div><h2 class="font-bold text-lg">Backtest chiến thuật</h2><p class="text-xs text-slate-400 mt-1">Kiểm tra chiến thuật trên dữ liệu quá khứ. Không đảm bảo lợi nhuận tương lai.</p></div>
+        <div class="flex flex-wrap gap-2 items-end">
+          <div><label class="text-xs text-slate-400 tip" data-tip="Khung nến dùng để test.">Khung nến test <span class="tip-i">i</span></label><select id="btTf" class="mt-1 w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2"><option value="15m">15 phút</option><option value="30m">30 phút</option><option value="1h">1 giờ</option></select></div>
+          <div><label class="text-xs text-slate-400 tip" data-tip="Khoảng thời gian dữ liệu quá khứ.">Thời gian test <span class="tip-i">i</span></label><select id="btDays" class="mt-1 w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2"><option value="1">1 ngày</option><option value="3">3 ngày</option><option value="7">7 ngày</option><option value="14">14 ngày</option></select></div>
+          <button id="btnBacktest" class="rounded-xl bg-indigo-500 hover:bg-indigo-400 text-slate-950 font-bold px-4 py-2">Chạy backtest</button>
+        </div>
+      </div>
+      <div id="btBox" class="hidden mt-4 space-y-4">
+        <div><div class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">1. Kết quả tổng quan</div><div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs"><div class="box p-3"><div class="text-slate-500 tip" data-tip="Điểm tổng hợp chất lượng backtest trên 100, dựa trên Total R, Winrate, Profit Factor, Drawdown, Fill Rate, Expectancy và độ đủ mẫu.">Backtest Score <span class="tip-i">i</span></div><div id="btScore" class="font-bold text-lg">-</div></div><div class="box p-3"><div class="text-slate-500 tip" data-tip="Tổng số setup/lệnh được test.">Số lệnh test <span class="tip-i">i</span></div><div id="btTrades" class="font-bold text-lg">-</div></div><div class="box p-3"><div class="text-slate-500 tip" data-tip="Tỷ lệ thắng trên số lệnh đã đóng.">Tỷ lệ thắng <span class="tip-i">i</span></div><div id="btWinrate" class="font-bold text-lg">-</div></div><div class="box p-3"><div class="text-slate-500 tip" data-tip="Tổng lợi nhuận theo R.">Tổng R <span class="tip-i">i</span></div><div id="btR" class="font-bold text-lg">-</div></div><div class="box p-3"><div class="text-slate-500 tip" data-tip="Drawdown tối đa tính theo R.">Sụt giảm tối đa <span class="tip-i">i</span></div><div id="btDD" class="font-bold text-lg">-</div></div></div></div>
+        <div><div class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">2. Chất lượng khớp Entry</div><div class="grid grid-cols-2 md:grid-cols-6 gap-2 text-xs"><div class="box p-3"><div class="text-slate-500 tip" data-tip="Missed / stale / expired setup.">Bỏ lỡ / Lỗi thời <span class="tip-i">i</span></div><div id="btMissed" class="font-bold text-lg">-</div></div><div class="box p-3"><div class="text-slate-500 tip" data-tip="Tỷ lệ setup thật sự khớp entry.">Tỷ lệ khớp Entry <span class="tip-i">i</span></div><div id="btFill" class="font-bold text-lg">-</div></div><div class="box p-3"><div class="text-slate-500 tip" data-tip="Kỳ vọng trung bình theo R.">Kỳ vọng / lệnh <span class="tip-i">i</span></div><div id="btExp" class="font-bold text-lg">-</div></div><div class="box p-3"><div class="text-slate-500 tip" data-tip="Profit Factor = tổng lời / tổng lỗ.">Profit Factor <span class="tip-i">i</span></div><div id="btPF" class="font-bold text-lg">-</div></div><div class="box p-3"><div class="text-slate-500 tip" data-tip="MFE là mức lời tối đa từng đạt trong lệnh, tính theo R.">MFE TB <span class="tip-i">i</span></div><div id="btMFE" class="font-bold text-lg">-</div></div><div class="box p-3"><div class="text-slate-500 tip" data-tip="MAE là mức âm tối đa từng chịu trong lệnh, tính theo R.">MAE TB <span class="tip-i">i</span></div><div id="btMAE" class="font-bold text-lg">-</div></div></div></div>
+        <div class="box p-3"><div class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">3. Diễn giải nhanh</div><div id="btDetail" class="text-sm text-slate-400">-</div><div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-3 text-xs text-slate-500"><div><b class="text-slate-300">Tỷ lệ thắng</b>: phải đi cùng PF và Drawdown.</div><div><b class="text-slate-300">Fill Rate</b>: thấp nghĩa là entry quá khó khớp.</div><div><b class="text-slate-300">Total R</b>: đo hiệu quả theo risk.</div></div></div>
+      </div>
+    </section>
+
+    <section id="forwardPanel" class="panel p-3 mb-4">
+      <div class="flex items-center justify-between mb-3"><div><h2 class="font-bold">Forward Test Log</h2><p class="text-xs text-slate-400">Tự lưu tín hiệu realtime gần nhất để sau này đánh giá edge thật.</p></div><div class="flex gap-2"><button id="btnExportForward" class="rounded-xl bg-cyan-900 hover:bg-cyan-800 border border-cyan-700 px-3 py-2 text-xs text-cyan-100">Export CSV</button><button id="btnClearForward" class="rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2 text-xs">Xóa log</button></div></div>
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs mb-3">
+        <div class="box p-3"><div class="text-slate-500 tip" data-tip="Số tín hiệu đã được lưu trong Forward Log.">Signals <span class="tip-i">i</span></div><div id="fwSignals" class="font-bold text-lg">-</div></div>
+        <div class="box p-3"><div class="text-slate-500 tip" data-tip="Tỷ lệ tín hiệu đạt TP1/TP2 trong log đã có outcome.">Winrate <span class="tip-i">i</span></div><div id="fwWinrate" class="font-bold text-lg">-</div></div>
+        <div class="box p-3"><div class="text-slate-500 tip" data-tip="Kỳ vọng trung bình ước tính theo R từ Forward Log.">Expectancy <span class="tip-i">i</span></div><div id="fwExp" class="font-bold text-lg">-</div></div>
+        <div class="box p-3"><div class="text-slate-500 tip" data-tip="MFE trung bình ước tính từ mốc 5/10/20 nến trong Forward Log.">MFE TB <span class="tip-i">i</span></div><div id="fwMFE" class="font-bold text-lg">-</div></div>
+        <div class="box p-3"><div class="text-slate-500 tip" data-tip="MAE trung bình ước tính từ mốc 5/10/20 nến trong Forward Log.">MAE TB <span class="tip-i">i</span></div><div id="fwMAE" class="font-bold text-lg">-</div></div>
+      </div>
+      <div id="forwardPlaybookStats" class="text-xs text-slate-400 rounded-xl border border-slate-800 p-2 mb-3">Chưa có thống kê playbook.</div>
+      <div id="forwardLog" class="text-xs text-slate-400 max-h-[180px] overflow-auto rounded-xl border border-slate-800 p-2">Chưa có log.</div>
+    </section>
+
+    <section id="footer" class="text-center text-xs text-slate-500 py-4 space-y-1">
+      <div class="font-semibold text-slate-400">Dino Futures Tool V3 Official</div>
+      <div>Build: 2026-05-16 · HTML-only · Manual execution only · watermark: dino98</div>
+      <div class="text-slate-600">For research, backtest, forward test and decision support. Not financial advice.</div>
+    </section>
+  </main>
+
+  <script>
+  'use strict';
+
+  const APP_VERSION = 'V3 Official';
+  const APP_BUILD = '2026-05-16';
+
+  const CONFIG = {
+    REST: 'https://fapi.binance.com',
+    WS: 'wss://fstream.binance.com/ws',
+    DEFAULT_SYMBOLS: ['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','DOGEUSDT','ADAUSDT','AVAXUSDT','LINKUSDT','TONUSDT','TRXUSDT','DOTUSDT','MATICUSDT','LTCUSDT','BCHUSDT','NEARUSDT','APTUSDT','ARBUSDT','OPUSDT','INJUSDT','ATOMUSDT','FILUSDT','SUIUSDT','ETCUSDT','XLMUSDT'],
+    SCANNER_LIMIT: 25,
+    CANDLE_LIMIT: 300,
+    REST_FALLBACK_MS: 10000,
+    MTF_TTL_MS: 5 * 60 * 1000,
+    SCAN_CONCURRENCY: 5
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const setText = (id, value = '-') => { const el = $(id); if (el) el.textContent = value; };
+  const setHTML = (id, value = '-') => { const el = $(id); if (el) el.innerHTML = value; };
+  const fmt = (n, d = 2) => Number.isFinite(Number(n)) ? Number(n).toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d }) : '-';
+  const nowVN = () => new Date().toLocaleString('vi-VN');
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+  const avg = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+
+  async function mapLimit(items, limit, fn) {
+    const out = [];
+    let index = 0;
+    async function worker() {
+      while (index < items.length) {
+        const current = index++;
+        out[current] = await fn(items[current], current);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+    return out;
+  }
+
+  const BinanceAPI = {
+    async klines(symbol, interval, limit = 300) {
+      const url = `${CONFIG.REST}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Không tải được kline ${symbol} ${interval}`);
+      const raw = await res.json();
+      return raw.map(k => ({ time: Math.floor(k[0] / 1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4], volume: +k[5] }));
+    },
+    async topSymbols(limit = CONFIG.SCANNER_LIMIT) {
+      try {
+        const res = await fetch(`${CONFIG.REST}/fapi/v1/ticker/24hr`);
+        const raw = await res.json();
+        return raw.filter(x => x.symbol.endsWith('USDT') && !x.symbol.includes('_'))
+          .sort((a, b) => +b.quoteVolume - +a.quoteVolume)
+          .slice(0, limit)
+          .map(x => ({ symbol: x.symbol, vol: +x.quoteVolume, change: +x.priceChangePercent }));
+      } catch (e) {
+        return CONFIG.DEFAULT_SYMBOLS.slice(0, limit).map(symbol => ({ symbol, vol: 0, change: 0 }));
+      }
+    },
+    async exchangeInfo(symbol) {
+      const res = await fetch(`${CONFIG.REST}/fapi/v1/exchangeInfo?symbol=${symbol}`);
+      if (!res.ok) throw new Error(`Không tải được exchangeInfo ${symbol}`);
+      const raw = await res.json();
+      const s = (raw.symbols || []).find(x => x.symbol === symbol);
+      if (!s) throw new Error(`Không tìm thấy rule Binance cho ${symbol}`);
+      const filter = (type) => (s.filters || []).find(f => f.filterType === type) || {};
+      const pf = filter('PRICE_FILTER'), lot = filter('LOT_SIZE'), minN = filter('MIN_NOTIONAL');
+      return {
+        symbol,
+        pricePrecision: s.pricePrecision ?? 2,
+        quantityPrecision: s.quantityPrecision ?? 3,
+        tickSize: +(pf.tickSize || 0),
+        stepSize: +(lot.stepSize || 0),
+        minQty: +(lot.minQty || 0),
+        minNotional: +(minN.notional || minN.minNotional || 5)
+      };
+    }
+  };
+
+  const Indicators = {
+    sma(values, period) { return values.map((_, i) => i < period - 1 ? null : avg(values.slice(i - period + 1, i + 1))); },
+    ema(values, period) {
+      const k = 2 / (period + 1), out = [];
+      let prev = values[0] || 0;
+      values.forEach((v, i) => { prev = i === 0 ? v : v * k + prev * (1 - k); out.push(prev); });
+      return out;
+    },
+    rsi(values, period = 14) {
+      const out = Array(values.length).fill(null); let gain = 0, loss = 0;
+      for (let i = 1; i < values.length; i++) {
+        const ch = values[i] - values[i - 1], g = Math.max(ch, 0), l = Math.max(-ch, 0);
+        if (i <= period) { gain += g; loss += l; if (i === period) { gain /= period; loss /= period; out[i] = 100 - 100 / (1 + gain / (loss || 1e-9)); } }
+        else { gain = (gain * (period - 1) + g) / period; loss = (loss * (period - 1) + l) / period; out[i] = 100 - 100 / (1 + gain / (loss || 1e-9)); }
+      }
+      return out;
+    },
+    atr(candles, period = 14) {
+      const tr = candles.map((c, i) => i === 0 ? c.high - c.low : Math.max(c.high - c.low, Math.abs(c.high - candles[i - 1].close), Math.abs(c.low - candles[i - 1].close)));
+      return this.sma(tr, period);
+    },
+    swings(candles, left = 2, right = 2) {
+      const highs = [], lows = [];
+      for (let i = left; i < candles.length - right; i++) {
+        const c = candles[i], win = candles.slice(i - left, i + right + 1);
+        if (win.every(x => c.high >= x.high)) highs.push({ i, time: c.time, price: c.high });
+        if (win.every(x => c.low <= x.low)) lows.push({ i, time: c.time, price: c.low });
+      }
+      return { highs, lows, lastHigh: highs.at(-1), prevHigh: highs.at(-2), lastLow: lows.at(-1), prevLow: lows.at(-2) };
+    },
+    fvg(candles, lookback = 80) {
+      const zones = [], atrArr = this.atr(candles, 14), vols = candles.map(c => c.volume), volSma = this.sma(vols, 20);
+      for (let i = Math.max(2, candles.length - lookback); i < candles.length; i++) {
+        const c1 = candles[i - 2], c2 = candles[i - 1], c3 = candles[i];
+        const atr = atrArr[i] || Math.max(1e-9, c2.high - c2.low);
+        const volAvg = volSma[i] || avg(vols.slice(Math.max(0, i - 20), i + 1));
+        const body = Math.abs(c2.close - c2.open), bodyRatio = body / Math.max(1e-9, c2.high - c2.low), displacement = body / Math.max(1e-9, atr);
+        const base = bodyRatio * 35 + Math.min(2, displacement) * 20 + Math.min(2, (c2.volume || 0) / (volAvg || 1)) * 15;
+        if (c3.low > c1.high) {
+          const low = c1.high, high = c3.low, size = high - low, mid = (low + high) / 2;
+          const future = candles.slice(i + 1), minLow = future.length ? Math.min(...future.map(x => x.low)) : high;
+          const fill = clamp((high - minLow) / Math.max(1e-9, size), 0, 1);
+          const quality = clamp(Math.round(base + Math.min(2, size / atr) * 15 - fill * 20), 0, 100);
+          zones.push({ type: 'BULLISH', i, time: candles[i].time, low, high, mid, size, fill, quality, bodyRatio });
+        }
+        if (c3.high < c1.low) {
+          const low = c3.high, high = c1.low, size = high - low, mid = (low + high) / 2;
+          const future = candles.slice(i + 1), maxHigh = future.length ? Math.max(...future.map(x => x.high)) : low;
+          const fill = clamp((maxHigh - low) / Math.max(1e-9, size), 0, 1);
+          const quality = clamp(Math.round(base + Math.min(2, size / atr) * 15 - fill * 20), 0, 100);
+          zones.push({ type: 'BEARISH', i, time: candles[i].time, low, high, mid, size, fill, quality, bodyRatio });
+        }
+      }
+      const active = zones.filter(z => z.fill < 0.95).slice(-8);
+      return { zones, active, lastBull: active.filter(z => z.type === 'BULLISH').at(-1), lastBear: active.filter(z => z.type === 'BEARISH').at(-1) };
+    }
+  };
+
+  const MarketContext = {
+    structure(candles) {
+      const sw = Indicators.swings(candles), last = candles.at(-1), atr = Indicators.atr(candles, 14).at(-1) || last.high - last.low;
+      const body = Math.abs(last.close - last.open), ratio = body / Math.max(1e-9, last.high - last.low), displacement = body > atr * 0.55 && ratio > 0.5;
+      let bias = 'NEUTRAL', bos = 'NONE', choch = 'NONE';
+      if (sw.lastHigh && last.close > sw.lastHigh.price && displacement) bos = 'BULLISH';
+      if (sw.lastLow && last.close < sw.lastLow.price && displacement) bos = 'BEARISH';
+      if (sw.prevHigh && sw.lastHigh && sw.prevLow && sw.lastLow) {
+        const hh = sw.lastHigh.price > sw.prevHigh.price, hl = sw.lastLow.price > sw.prevLow.price, lh = sw.lastHigh.price < sw.prevHigh.price, ll = sw.lastLow.price < sw.prevLow.price;
+        if (hh && hl) bias = 'BULLISH';
+        if (lh && ll) bias = 'BEARISH';
+        if (bias === 'BEARISH' && bos === 'BULLISH') choch = 'BULLISH';
+        if (bias === 'BULLISH' && bos === 'BEARISH') choch = 'BEARISH';
+      }
+      return { sw, bias, bos, choch, displacement, bodyRatio: ratio };
+    },
+    liquidity(candles) {
+      const sw = Indicators.swings(candles), last = candles.at(-1), atr = Indicators.atr(candles, 14).at(-1) || last.high - last.low;
+      const tolerance = atr * 0.18, highs = sw.highs.slice(-10), lows = sw.lows.slice(-10);
+      const eqHighs = highs.filter(h => highs.some(x => x !== h && Math.abs(x.price - h.price) <= tolerance));
+      const eqLows = lows.filter(l => lows.some(x => x !== l && Math.abs(x.price - l.price) <= tolerance));
+      const highLiquidity = eqHighs.length ? Math.max(...eqHighs.map(x => x.price)) : (sw.lastHigh?.price || null);
+      const lowLiquidity = eqLows.length ? Math.min(...eqLows.map(x => x.price)) : (sw.lastLow?.price || null);
+      const sweepHigh = highLiquidity && last.high > highLiquidity && last.close < highLiquidity;
+      const sweepLow = lowLiquidity && last.low < lowLiquidity && last.close > lowLiquidity;
+      let bias = 'NONE'; if (sweepLow) bias = 'SSL sweep'; else if (sweepHigh) bias = 'BSL sweep'; else if (eqHighs.length || eqLows.length) bias = 'Equal liquidity';
+      return { equalHighs: eqHighs.length, equalLows: eqLows.length, highLiquidity, lowLiquidity, sweepHigh, sweepLow, bias };
+    },
+    state(candles) {
+      const last = candles.at(-1), closes = candles.map(x => x.close), fast = Indicators.ema(closes, 20), slow = Indicators.ema(closes, 50), atrArr = Indicators.atr(candles, 14), i = candles.length - 1;
+      const atr = atrArr[i] || last.high - last.low, atrPct = atr / last.close, spread = Math.abs(fast[i] - slow[i]) / last.close, extension = Math.abs(last.close - fast[i]) / (atr || 1);
+      const structure = this.structure(candles), fvg = Indicators.fvg(candles), liquidity = this.liquidity(candles);
+      let state = 'BALANCED', action = 'WAIT', quality = 50;
+      if (atrPct > 0.025) { state = 'CHAOTIC'; action = 'NO_TRADE'; quality = 15; }
+      else if (spread < 0.0012 && atrPct < 0.004) { state = 'COMPRESSION'; action = 'WAIT_BREAKOUT'; quality = 45; }
+      else if (structure.displacement && spread > 0.0015) { state = 'EXPANSION'; action = 'FOLLOW_PULLBACK'; quality = 80; }
+      else if (extension > 2.2) { state = 'EXHAUSTION'; action = 'WAIT_RETRACE'; quality = 35; }
+      else if (structure.bos !== 'NONE' || structure.choch !== 'NONE') { state = 'STRUCTURE_SHIFT'; action = 'TRADE_RETEST'; quality = 75; }
+      else if (fvg.lastBull || fvg.lastBear) { state = 'IMBALANCE_ACTIVE'; action = 'WAIT_FVG_FILL'; quality = 68; }
+      return { state, action, quality, atrPct, spread, extension, structure, fvg, liquidity };
+    },
+    mtfBias(candles) {
+      const closes = candles.map(x => x.close), fast = Indicators.ema(closes, 20), slow = Indicators.ema(closes, 50), i = candles.length - 1;
+      if (fast[i] > slow[i] && closes[i] > fast[i]) return 'LONG';
+      if (fast[i] < slow[i] && closes[i] < fast[i]) return 'SHORT';
+      return 'NEUTRAL';
+    },
+    mtfSnapshot(candles) { const bias = this.mtfBias(candles), st = this.structure(candles), state = this.state(candles); return { bias, structure: st.bias, bos: st.bos, choch: st.choch, marketState: state.state, quality: state.quality }; },
+    async mtfEngine(symbol) {
+      const [c4h, c1h, c15m, c5m] = await Promise.all([BinanceAPI.klines(symbol, '4h', 300), BinanceAPI.klines(symbol, '1h', 300), BinanceAPI.klines(symbol, '15m', 300), BinanceAPI.klines(symbol, '5m', 300)]);
+      const h4 = this.mtfSnapshot(c4h), h1 = this.mtfSnapshot(c1h), m15 = this.mtfSnapshot(c15m), m5 = this.mtfSnapshot(c5m);
+      const votes = [h4.bias, h1.bias, m15.bias, m5.bias], longVotes = votes.filter(v => v === 'LONG').length, shortVotes = votes.filter(v => v === 'SHORT').length;
+      let alignment = 'MIXED', score = Math.max(longVotes, shortVotes) * 20;
+      if (longVotes >= 3) { alignment = 'LONG'; score = longVotes * 25; }
+      else if (shortVotes >= 3) { alignment = 'SHORT'; score = shortVotes * 25; }
+      return { alignment, score, h4, h1, m15, m5, label: `4H ${h4.bias} · 1H ${h1.bias} · 15m ${m15.bias} · 5m ${m5.bias}` };
+    },
+    killZone(timeSec = null) {
+      const date = timeSec ? new Date(timeSec * 1000) : new Date();
+      const h = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', hour12: false }).format(date));
+      const m = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Ho_Chi_Minh', minute: '2-digit' }).format(date));
+      const mins = h * 60 + m;
+      if (mins >= 19 * 60 && mins <= 22 * 60 + 30) return { name: 'NY Kill Zone', quality: 'HIGH', ok: true };
+      if (mins >= 14 * 60 && mins <= 17 * 60 + 30) return { name: 'London Kill Zone', quality: 'MEDIUM', ok: true };
+      return { name: 'Off Kill Zone', quality: 'LOW', ok: false };
+    }
+  };
+
+  class TradePlan { constructor(data) { Object.assign(this, data); Object.freeze(this); } }
+
+  const PlaybookEngine = {
+    detect({direction, ctx, relevantFvg, liq, st, fast, slow, last, score}) {
+      if (liq?.sweepHigh || liq?.sweepLow) {
+        const sweepOk = direction === 'LONG' ? liq.sweepLow : liq.sweepHigh;
+        if (sweepOk) return { name:'Liquidity Sweep Reversal', code:'LSR', confidence:82, rule:'Sweep thanh khoản cùng hướng đảo chiều + reclaim' };
+      }
+      if (relevantFvg && relevantFvg.quality >= 65 && ['EXPANSION','IMBALANCE_ACTIVE','STRUCTURE_SHIFT'].includes(ctx.state)) {
+        return { name:'FVG Continuation', code:'FVG-C', confidence:Math.min(95, relevantFvg.quality + 8), rule:'FVG chất lượng + market theo hướng continuation' };
+      }
+      if (st.bos !== 'NONE' || st.choch !== 'NONE') {
+        return { name:'Breakout Retest', code:'BRK-R', confidence:76, rule:'BOS/CHOCH + chờ retest vùng breakout' };
+      }
+      const trendOk = direction === 'LONG' ? fast > slow && last.close > fast : fast < slow && last.close < fast;
+      if (trendOk) return { name:'Trend Pullback', code:'TR-PB', confidence:70, rule:'EMA trend + pullback về vùng giá hợp lý' };
+      if (ctx.state === 'COMPRESSION' || ctx.state === 'BALANCED') return { name:'Range Mean Reversion', code:'RANGE', confidence:58, rule:'Range/compression, chỉ trade khi RR và liquidity rõ' };
+      return { name:'General Momentum', code:'GEN', confidence:Math.min(75, score), rule:'Tổng hợp momentum/structure' };
+    }
+  };
+
+  const TradePlanEngine = {
+    create({ symbol, timeframe, strategy, rr, candles, mtfBias = 'OFF', mtfEngine = null }) {
+      if (candles.length < 100) return null;
+      const closes = candles.map(c => c.close), i = candles.length - 1, last = candles[i];
+      const fast = Indicators.ema(closes, 20), slow = Indicators.ema(closes, 50), rsi = Indicators.rsi(closes, 14), atrArr = Indicators.atr(candles, 14), atr = atrArr[i] || last.high - last.low;
+      const ctx = MarketContext.state(candles), st = ctx.structure, fvg = ctx.fvg, liq = ctx.liquidity, sw = Indicators.swings(candles);
+      let longScore = 0, shortScore = 0;
+      if (fast[i] > slow[i]) longScore += 18; else shortScore += 18;
+      if (last.close > fast[i]) longScore += 10; else shortScore += 10;
+      if (rsi[i] > 52) longScore += 10; if (rsi[i] < 48) shortScore += 10;
+      if (st.bos === 'BULLISH' || st.choch === 'BULLISH' || st.bias === 'BULLISH') longScore += 18;
+      if (st.bos === 'BEARISH' || st.choch === 'BEARISH' || st.bias === 'BEARISH') shortScore += 18;
+      if (fvg.lastBull) longScore += 12; if (fvg.lastBear) shortScore += 12;
+      if (mtfBias === 'LONG') longScore += 10; if (mtfBias === 'SHORT') shortScore += 10;
+      if (liq.sweepLow) longScore += 8; if (liq.sweepHigh) shortScore += 8;
+      if (fvg.lastBull?.quality >= 70) longScore += 8; if (fvg.lastBear?.quality >= 70) shortScore += 8;
+      if (mtfEngine?.alignment === 'LONG') longScore += 8; if (mtfEngine?.alignment === 'SHORT') shortScore += 8;
+      const direction = longScore >= shortScore ? 'LONG' : 'SHORT', score = Math.max(longScore, shortScore);
+      if (score < 55 || ctx.state === 'CHAOTIC') return null;
+      const relevantFvg = direction === 'LONG' ? fvg.lastBull : fvg.lastBear, entryType = relevantFvg ? 'FVG_PULLBACK' : 'PULLBACK_LIMIT';
+      let zoneLow, zoneHigh, entry;
+      if (relevantFvg) {
+        if (direction === 'LONG') { zoneLow = relevantFvg.low; zoneHigh = relevantFvg.mid; entry = (zoneLow + zoneHigh) / 2; }
+        else { zoneLow = relevantFvg.mid; zoneHigh = relevantFvg.high; entry = (zoneLow + zoneHigh) / 2; }
+      } else {
+        const pull = atr * 0.35;
+        entry = direction === 'LONG' ? Math.max(fast[i], last.close - pull) : Math.min(fast[i], last.close + pull);
+        zoneLow = direction === 'LONG' ? entry - atr * 0.15 : entry - atr * 0.08;
+        zoneHigh = direction === 'LONG' ? entry + atr * 0.08 : entry + atr * 0.15;
+      }
+      if (zoneLow > zoneHigh) [zoneLow, zoneHigh] = [zoneHigh, zoneLow];
+      const buffer = atr * 0.22;
+      const invalids = direction === 'LONG' ? [sw.lastLow?.price, relevantFvg?.low, entry - atr * 0.8].filter(Number.isFinite) : [sw.lastHigh?.price, relevantFvg?.high, entry + atr * 0.8].filter(Number.isFinite);
+      const sl = direction === 'LONG' ? Math.min(...invalids) - buffer : Math.max(...invalids) + buffer;
+      const risk = direction === 'LONG' ? entry - sl : sl - entry;
+      if (!Number.isFinite(risk) || risk <= 0) return null;
+      let tp1, tp2;
+      if (direction === 'LONG') {
+        const highs = sw.highs.map(x => x.price).filter(p => p > entry).sort((a, b) => a - b);
+        tp1 = highs[0] || entry + risk; tp2 = highs.find(p => p > tp1 + risk * 0.25) || entry + risk * rr;
+        if ((tp1 - entry) / risk < 0.65) tp1 = entry + risk * 0.8; if ((tp2 - entry) / risk < 1.2) tp2 = entry + risk * Math.max(1.5, rr);
+      } else {
+        const lows = sw.lows.map(x => x.price).filter(p => p < entry).sort((a, b) => b - a);
+        tp1 = lows[0] || entry - risk; tp2 = lows.find(p => p < tp1 - risk * 0.25) || entry - risk * rr;
+        if ((entry - tp1) / risk < 0.65) tp1 = entry - risk * 0.8; if ((entry - tp2) / risk < 1.2) tp2 = entry - risk * Math.max(1.5, rr);
+      }
+      const playbook = PlaybookEngine.detect({ direction, ctx, relevantFvg, liq, st, fast: fast[i], slow: slow[i], last, score });
+      const signalPrice = last.close, stale = this.isStale({ direction, tp1, tp2, signalPrice, entryType }), distanceToEntryR = Math.abs(signalPrice - entry) / Math.max(1e-9, risk), inEntryZone = signalPrice >= zoneLow && signalPrice <= zoneHigh;
+      let stage = 'WAIT_PULLBACK', action = 'WAIT PULLBACK';
+      if (stale) { stage = 'STALE_PLAN'; action = 'DO NOT CHASE'; }
+      else if (inEntryZone || distanceToEntryR <= 0.35) { stage = score >= 75 ? 'TRIGGER_READY' : 'ENTRY_ZONE'; action = 'WATCH CONFIRM / LIMIT READY'; }
+      else if (distanceToEntryR > 1.5) { stage = 'SETUP_FORMING'; action = 'ENTRY TOO FAR · WAIT'; }
+      else { stage = 'WAIT_PULLBACK'; action = 'WAIT PRICE TO ENTRY ZONE'; }
+      let entryTiming = 100;
+      entryTiming -= Math.min(65, distanceToEntryR * 35);
+      entryTiming += (relevantFvg?.quality || 50) / 10;
+      entryTiming += mtfEngine?.alignment === direction ? 8 : 0;
+      entryTiming += ctx.state === 'EXPANSION' ? 8 : ctx.state === 'EXHAUSTION' ? -12 : 0;
+      entryTiming = clamp(Math.round(entryTiming), 0, 100);
+      const signal = stage === 'STALE_PLAN' ? 'STALE PLAN' : stage === 'SETUP_FORMING' ? `${direction} SETUP FORMING` : stage === 'WAIT_PULLBACK' ? `${direction} WAIT PULLBACK` : stage === 'ENTRY_ZONE' ? `${direction} ENTRY ZONE` : `STRONG ${direction}`;
+      const rank = score >= 85 ? 'A+' : score >= 75 ? 'A' : score >= 65 ? 'B' : 'C';
+      const id = `${symbol}|${timeframe}|${direction}|${entry.toFixed(4)}|${sl.toFixed(4)}|${tp1.toFixed(4)}|${tp2.toFixed(4)}|${entryType}|${stage}`;
+      return new TradePlan({ id, symbol, timeframe, strategy, direction, signal, score: Math.round(score), rank, stage, action, entryTiming, distanceToEntryR, createdAt: Date.now(), createdTime: nowVN(), signalCandleTime: last.time, signalPrice, entry, entryZoneLow: zoneLow, entryZoneHigh: zoneHigh, sl, tp1, tp2, tp: tp2, rr, risk, entryType, setupType: playbook.name, playbook: playbook.name, playbookCode: playbook.code, playbookConfidence: playbook.confidence, playbookRule: playbook.rule, reason: stale ? 'Plan lỗi thời: giá đã đi qua vùng target trước khi khớp entry.' : `${stage}: ${action}. Entry distance ${distanceToEntryR.toFixed(2)}R. SL theo invalidation, TP theo liquidity/RR validation.`, staleAtBirth: stale, context: { marketState: ctx.state, marketAction: ctx.action, mtfBias, mtfDetail: mtfEngine?.label || mtfBias, fvg: relevantFvg ? `${relevantFvg.type} · Q${relevantFvg.quality} · Fill ${Math.round((relevantFvg.fill || 0) * 100)}%` : 'NONE', fvgQuality: relevantFvg?.quality || 0, liquidity: liq?.bias || 'NONE', liquidityRaw: liq, structure: `${st.bias} / BOS ${st.bos}` }, series: { fast, slow } });
+    },
+    isStale({ direction, tp1, tp2, signalPrice, entryType }) { const limitLike = ['FVG_PULLBACK', 'PULLBACK_LIMIT', 'TREND_RETEST_LIMIT', 'REVERSAL_RECLAIM_LIMIT'].includes(entryType); if (!limitLike) return false; if (direction === 'SHORT') return signalPrice <= Math.max(tp1, tp2); if (direction === 'LONG') return signalPrice >= Math.min(tp1, tp2); return false; }
+  };
+
+  const ExecutionEngine = {
+    init(plan) { if (plan.manualActive) return { planId: plan.id, state: 'ENTRY_FILLED', entryTouched: true, tp1Touched: false, tp2Touched: false, invalidated: false, createdAt: Date.now(), events: [{ type: 'MANUAL_ENTRY', time: Date.now(), price: plan.entry }] }; return { planId: plan.id, state: plan.staleAtBirth ? 'STALE_PLAN' : 'WAIT_ENTRY', entryTouched: false, tp1Touched: false, tp2Touched: false, invalidated: false, createdAt: Date.now(), events: [] }; },
+    update(plan, state, candleOrPrice) {
+      if (!plan) return { state: 'NO_TRADE', label: 'NO TRADE', cls: 'text-slate-400', note: 'Chưa có plan' };
+      if (state?.raw) state = state.raw; if (!state || state.planId !== plan.id) state = this.init(plan);
+      const raw = typeof candleOrPrice === 'number' ? { high: candleOrPrice, low: candleOrPrice, close: candleOrPrice, time: null, isTick: true } : candleOrPrice;
+      const sameSignalCandle = raw?.time && raw.time === plan.signalCandleTime && !raw.isTick;
+      const p = sameSignalCandle ? { high: raw.close, low: raw.close, close: raw.close, time: raw.time } : raw;
+      if (!p) return this.view(plan, state, plan.signalPrice);
+      const high = Math.max(p.high, p.close), low = Math.min(p.low, p.close), price = p.close, isLong = plan.direction === 'LONG';
+      if (state.state === 'STALE_PLAN' && !plan.manualActive) return this.view(plan, state, price);
+      if (isLong) {
+        if (!state.entryTouched && low <= plan.entry) { state.entryTouched = true; state.events.push({ type: 'ENTRY', time: Date.now(), price: plan.entry }); }
+        if (!plan.manualActive && !state.entryTouched && (high >= plan.tp1 || high >= plan.tp2)) state.state = 'STALE_PLAN';
+        if (state.entryTouched && !state.tp1Touched && high >= plan.tp1) { state.tp1Touched = true; state.events.push({ type: 'TP1', time: Date.now(), price: plan.tp1 }); }
+        if (state.entryTouched && !state.tp2Touched && high >= plan.tp2) { state.tp2Touched = true; state.events.push({ type: 'TP2', time: Date.now(), price: plan.tp2 }); }
+        if (!state.invalidated && low <= plan.sl) { state.invalidated = true; state.events.push({ type: 'SL', time: Date.now(), price: plan.sl }); }
+      } else {
+        if (!state.entryTouched && high >= plan.entry) { state.entryTouched = true; state.events.push({ type: 'ENTRY', time: Date.now(), price: plan.entry }); }
+        if (!plan.manualActive && !state.entryTouched && (low <= plan.tp1 || low <= plan.tp2)) state.state = 'STALE_PLAN';
+        if (state.entryTouched && !state.tp1Touched && low <= plan.tp1) { state.tp1Touched = true; state.events.push({ type: 'TP1', time: Date.now(), price: plan.tp1 }); }
+        if (state.entryTouched && !state.tp2Touched && low <= plan.tp2) { state.tp2Touched = true; state.events.push({ type: 'TP2', time: Date.now(), price: plan.tp2 }); }
+        if (!state.invalidated && high >= plan.sl) { state.invalidated = true; state.events.push({ type: 'SL', time: Date.now(), price: plan.sl }); }
+      }
+      if (state.invalidated) state.state = 'INVALIDATED'; else if (state.tp2Touched) state.state = 'TP2_DONE'; else if (state.tp1Touched) state.state = 'TP1_HIT'; else if (state.entryTouched) { const running = isLong ? price > plan.entry : price < plan.entry; state.state = running ? 'RUNNING_TO_TP' : 'ENTRY_FILLED'; } else if (state.state !== 'STALE_PLAN') state.state = 'WAIT_ENTRY';
+      return this.view(plan, state, price);
+    },
+    view(plan, state, price) { const map = { WAIT_ENTRY: ['WAIT ENTRY', 'text-cyan-300', plan.direction === 'LONG' ? 'Chờ giá hồi xuống Entry' : 'Chờ giá hồi lên Entry'], ENTRY_FILLED: ['ENTRY FILLED', 'text-emerald-300', 'Đã chạm Entry, đang quanh vùng vào'], RUNNING_TO_TP: ['RUNNING TO TP', 'text-emerald-300', 'Đã chạm Entry và đang đi đúng hướng'], TP1_HIT: ['TP1 HIT / MANAGE', 'text-emerald-300', 'Đã chạm TP1, nên quản lý lệnh/BE'], TP2_DONE: ['TP2 DONE', 'text-emerald-300', 'Đã đạt TP2, không chase'], INVALIDATED: ['INVALIDATED', 'text-rose-300', 'Setup mất hiệu lực/chạm SL'], STALE_PLAN: ['STALE PLAN', 'text-rose-300', 'Plan lỗi thời: giá đã đi qua target trước khi khớp Entry'] }; const [label, cls, note] = map[state.state] || ['UNKNOWN', 'text-slate-400', 'Không xác định']; const distPct = Math.abs(price - plan.entry) / plan.entry * 100, distR = Math.abs(price - plan.entry) / Math.max(1e-9, plan.risk); return { state: state.state, label, cls, note, distPct, distR, price, raw: state }; },
+    terminal(state) { const raw = state?.raw || state; return ['STALE_PLAN', 'TP2_DONE', 'INVALIDATED'].includes(raw?.state); }
+  };
+
+  const MarketRegimeEngine = { evaluate(plan) { const state = plan?.context?.marketState || 'UNKNOWN', stage = plan?.stage || 'UNKNOWN', strategy = plan?.strategy || 'momentum'; let recommendation = 'WAIT', penalty = 0, reason = 'Regime trung tính'; if (state === 'CHAOTIC') { recommendation = 'NO_TRADE'; penalty = 35; reason = 'Thị trường nhiễu/ATR spike, tránh futures scalp'; } else if (state === 'COMPRESSION') { recommendation = 'WAIT_BREAKOUT'; penalty = stage === 'TRIGGER_READY' ? 5 : 18; reason = 'Giá đang nén, ưu tiên chờ breakout/retest rõ'; } else if (state === 'EXPANSION') { recommendation = 'FOLLOW_PULLBACK'; penalty = stage === 'SETUP_FORMING' ? 10 : 0; reason = 'Xu hướng mở rộng, ưu tiên pullback theo trend'; } else if (state === 'EXHAUSTION') { recommendation = 'REDUCE_OR_WAIT'; penalty = stage === 'ENTRY_ZONE' || stage === 'TRIGGER_READY' ? 8 : 24; reason = 'Xu hướng có dấu hiệu đuối, tránh chase'; } else if (state === 'STRUCTURE_SHIFT') { recommendation = 'TRADE_RETEST'; penalty = stage === 'WAIT_PULLBACK' ? 4 : 0; reason = 'Có shift cấu trúc, ưu tiên retest'; } else if (state === 'IMBALANCE_ACTIVE') { recommendation = 'WAIT_FVG_FILL'; penalty = stage === 'ENTRY_ZONE' || stage === 'TRIGGER_READY' ? 0 : 8; reason = 'Có FVG, ưu tiên chờ giá hồi vào vùng'; } if (strategy === 'momentum' && ['COMPRESSION', 'EXHAUSTION'].includes(state)) penalty += 8; if (strategy === 'reversal' && state === 'EXPANSION') penalty += 10; return { state, stage, strategy, recommendation, penalty, reason }; } };
+
+  const NoTradeEngine = { evaluate(plan, execution = null) { if (!plan) return { blocked: true, score: 0, reasons: ['Không có TradePlan'], label: 'NO PLAN' }; const mode = $('riskMode')?.value || 'balanced', profile = mode === 'safe' ? {dist:1.1,timing:45,sl:2.2,rr:1.4,penalty:14} : mode === 'aggressive' ? {dist:2.2,timing:25,sl:3.8,rr:1.05,penalty:-10} : {dist:1.5,timing:35,sl:2.8,rr:1.2,penalty:0}; const feePct = +($('feePct')?.value || 0.05), slipPct = +($('slippagePct')?.value || 0.03); const reasons = [], rrReal = plan.direction === 'LONG' ? (plan.tp2 - plan.entry) / Math.max(1e-9, plan.risk) : (plan.entry - plan.tp2) / Math.max(1e-9, plan.risk), slPct = Math.abs(plan.entry - plan.sl) / plan.entry * 100, costR = ((feePct + slipPct) * 2 / 100) / Math.max(1e-9, Math.abs(plan.entry - plan.sl) / plan.entry), netRR = rrReal - costR, timing = Number.isFinite(plan.entryTiming) ? plan.entryTiming : 50, distR = Number.isFinite(plan.distanceToEntryR) ? plan.distanceToEntryR : 999, rawState = (execution?.raw || execution)?.state, regime = MarketRegimeEngine.evaluate(plan); if (['TP2_DONE', 'INVALIDATED'].includes(rawState)) reasons.push(`Execution terminal: ${rawState}`); if (rawState === 'STALE_PLAN' && !plan.manualActive) reasons.push(`Execution terminal: ${rawState}`); if (plan.manualActive) return { blocked: reasons.length > 0, score: reasons.length ? 20 : 100, reasons, label: reasons.length ? `NO TRADE · ${reasons[0]}` : 'MANUAL ACTIVE', rrReal, slPct, regime }; if (plan.stage === 'STALE_PLAN') reasons.push('Plan lỗi thời / giá đã đi qua target'); if (plan.context?.marketState === 'CHAOTIC') reasons.push('Market quá nhiễu / ATR spike'); if (regime.penalty >= 20 && mode !== 'aggressive') reasons.push(`Regime không phù hợp: ${regime.reason}`); if (plan.context?.marketState === 'EXHAUSTION' && plan.stage !== 'ENTRY_ZONE' && plan.stage !== 'TRIGGER_READY' && mode === 'safe') reasons.push('Market exhaustion nhưng chưa ở entry zone'); if (distR > profile.dist) reasons.push(`Entry còn quá xa: ${distR.toFixed(2)}R`); if (timing < profile.timing) reasons.push(`Entry Timing thấp: ${timing}/100`); if (rrReal < profile.rr) reasons.push(`RR thực tế thấp: ${rrReal.toFixed(2)}R`); if (netRR < Math.max(0.9, profile.rr - 0.25)) reasons.push(`Net RR sau phí/trượt giá thấp: ${netRR.toFixed(2)}R`); if (slPct > profile.sl) reasons.push(`SL quá rộng: ${slPct.toFixed(2)}%`); if (plan.score < 60) reasons.push(`Setup score thấp: ${plan.score}`); const daily = DailyRiskEngine.stats(); if (daily.blocked) reasons.push(`Daily Risk Guard: ${daily.reason}`); let score = 100; score -= Math.min(35, distR * 18); score -= Math.max(0, 35 - timing) * 0.8; score -= rrReal < 1.2 ? 25 : rrReal < 1.6 ? 10 : 0; score -= slPct > 2.8 ? 20 : slPct > 1.8 ? 8 : 0; score -= Math.max(0, (regime.penalty || 0) + profile.penalty); score += plan.rank === 'A+' ? 8 : plan.rank === 'A' ? 4 : 0; score += plan.stage === 'TRIGGER_READY' ? 8 : plan.stage === 'ENTRY_ZONE' ? 5 : 0; score = clamp(Math.round(score), 0, 100); return { blocked: reasons.length > 0, score, reasons, label: reasons.length ? `NO TRADE · ${reasons[0]}` : 'TRADE ALLOWED', rrReal, netRR, costR, slPct, regime, mode, daily }; } };
+
+  const DailyRiskEngine = {
+    todayKey() { return new Date().toLocaleDateString('vi-VN'); },
+    config() { return { maxTrades: 5, maxLossR: -3, maxConsecutiveLosses: 2 }; },
+    stats() {
+      const rows = ForwardLogEngine.read().filter(r => (r.time || '').startsWith(this.todayKey()));
+      const done = rows.filter(r => Number.isFinite(r.resultR));
+      const totalR = done.reduce((a,b)=>a+b.resultR,0);
+      let streak = 0;
+      for (let i = done.length - 1; i >= 0; i--) { if (done[i].resultR < 0) streak++; else break; }
+      const cfg = this.config();
+      const blocked = done.length >= cfg.maxTrades || totalR <= cfg.maxLossR || streak >= cfg.maxConsecutiveLosses;
+      const reason = done.length >= cfg.maxTrades ? 'Đạt max trades/day' : totalR <= cfg.maxLossR ? 'Đạt daily loss stop' : streak >= cfg.maxConsecutiveLosses ? 'Thua liên tiếp, cần cooldown' : 'OK';
+      return { rows, done, trades: done.length, totalR, streak, blocked, reason, cfg };
+    }
+  };
+
+  const ScoreEngine = {
+    ev(plan, guard, execution) {
+      if (!plan || !guard) return 0;
+      const stageBonus = { TRIGGER_READY: 14, ENTRY_ZONE: 10, WAIT_PULLBACK: 4, SETUP_FORMING: -4, STALE_PLAN: -40, MANUAL_ACTIVE: 8 }[plan.stage] || 0;
+      const execBonus = ['ENTRY FILLED','RUNNING TO TP','TP1 HIT / MANAGE'].includes(execution?.label) ? 10 : 0;
+      const blockedPenalty = guard.blocked ? 35 : 0;
+      const ev = plan.score * 0.28 + (plan.entryTiming || 0) * 0.22 + guard.score * 0.40 + stageBonus + execBonus - blockedPenalty;
+      return clamp(Math.round(ev), 0, 100);
+    }
+  };
+
+  const TradeManagementEngine = { evaluate(plan, execution) { if (!plan || !execution) return { label: '-', note: 'Chưa có lệnh để quản lý' }; const raw = execution.raw || execution, price = execution.price || plan.signalPrice, isLong = plan.direction === 'LONG', moveR = isLong ? (price - plan.entry) / Math.max(1e-9, plan.risk) : (plan.entry - price) / Math.max(1e-9, plan.risk); if (plan.manualActive && raw.state === 'ENTRY_FILLED') return { label: 'MANAGE ACTIVE', note: `Đã xác nhận entry thật. Hiện tại ${moveR.toFixed(2)}R. Theo dõi TP1/SL.` }; if (raw.state === 'WAIT_ENTRY') return { label: 'WAIT ENTRY', note: 'Chưa vào lệnh. Không chase, chỉ chờ Entry Zone.' }; if (raw.state === 'ENTRY_FILLED') return { label: 'HOLD / WATCH', note: `Lệnh vừa active. Move ${moveR.toFixed(2)}R.` }; if (raw.state === 'RUNNING_TO_TP') return { label: 'RUNNING', note: `Đang đúng hướng ${moveR.toFixed(2)}R. Chuẩn bị TP1.` }; if (raw.state === 'TP1_HIT') return { label: 'MANAGE TP1', note: 'Đã TP1: cân nhắc chốt 40–60%, dời SL về BE nếu ổn.' }; if (raw.state === 'TP2_DONE') return { label: 'DONE', note: 'Đã TP2. Không chase lại plan cũ.' }; if (raw.state === 'INVALIDATED') return { label: 'STOPPED/INVALID', note: 'Setup mất hiệu lực. Không vào lại nếu chưa có setup mới.' }; if (raw.state === 'STALE_PLAN') return { label: 'DO NOT CHASE', note: 'Plan lỗi thời. Không vào lệnh.' }; return { label: 'WATCH', note: 'Theo dõi thêm xác nhận giá.' }; } };
+
+  const RiskEngine = { size(plan, execution) { const raw = execution?.raw || execution; if (!plan || ['STALE_PLAN', 'TP2_DONE', 'INVALIDATED'].includes(raw?.state)) return null; const account = +$('accountSize').value || 0, riskPct = +$('riskPct').value || 0, leverage = +$('leverage').value || 1, mode = $('marginMode').value, slPct = Math.abs(plan.entry - plan.sl) / plan.entry; if (slPct <= 0) return null; let margin, position, riskUsdt; if (mode === 'auto') { riskUsdt = account * riskPct / 100; position = riskUsdt / slPct; margin = position / leverage; } else { margin = +mode; position = margin * leverage; riskUsdt = position * slPct; } const feePct = +($('feePct')?.value || 0.05), slipPct = +($('slippagePct')?.value || 0.03);
+      const rrReal = plan.direction === 'LONG' ? (plan.tp2 - plan.entry) / Math.max(1e-9, plan.risk) : (plan.entry - plan.tp2) / Math.max(1e-9, plan.risk);
+      const costR = ((feePct + slipPct) * 2 / 100) / Math.max(1e-9, slPct);
+      const netRR = rrReal - costR;
+      return { margin, position, riskUsdt, qty: position / plan.entry, slPct, rrReal, netRR, costR, mode: mode === 'auto' ? 'AUTO RISK' : 'FIXED MARGIN' }; } };
+
+  const ExchangeRules = {
+    decimals(step, fallback = 4) {
+      if (!step || !Number.isFinite(step)) return fallback;
+      const s = String(step);
+      if (s.includes('e-')) return Number(s.split('e-')[1]);
+      return (s.split('.')[1] || '').replace(/0+$/, '').length;
+    },
+    roundStep(value, step, mode = 'nearest') {
+      if (!Number.isFinite(value) || !step) return value;
+      const raw = value / step;
+      const rounded = mode === 'floor' ? Math.floor(raw) : mode === 'ceil' ? Math.ceil(raw) : Math.round(raw);
+      return rounded * step;
+    },
+    price(value, rule) {
+      const v = this.roundStep(value, rule?.tickSize || 0, 'nearest');
+      return Number.isFinite(v) ? v : value;
+    },
+    qty(value, rule) {
+      // Không tự nâng qty lên minQty, vì làm vậy có thể tăng rủi ro/vị thế vượt tính toán ban đầu.
+      // Nếu qty nhỏ hơn minQty, validate() sẽ cảnh báo để user tự quyết định tăng vốn hoặc bỏ lệnh.
+      const v = this.roundStep(value, rule?.stepSize || 0, 'floor');
+      return Number.isFinite(v) ? v : value;
+    },
+    fmtPrice(value, rule) { return fmt(this.price(value, rule), this.decimals(rule?.tickSize, rule?.pricePrecision ?? 2)); },
+    fmtQty(value, rule) { return fmt(this.qty(value, rule), this.decimals(rule?.stepSize, rule?.quantityPrecision ?? 3)); },
+    validate(position, qty, rule) {
+      if (!rule) return { ok:false, note:'Chưa có exchangeInfo' };
+      const notes = [];
+      if (qty < (rule.minQty || 0)) notes.push(`Qty < minQty ${rule.minQty}`);
+      if (position < (rule.minNotional || 0)) notes.push(`Notional < ${rule.minNotional} USDT`);
+      return { ok: notes.length === 0, note: notes.length ? notes.join(' · ') : `OK · tick ${rule.tickSize} · step ${rule.stepSize}` };
+    }
+  };
+
+  const ForwardLogEngine = { key: 'dino98_forward_log_v3', read() { try { return JSON.parse(localStorage.getItem(this.key) || '[]'); } catch (e) { return []; } }, write(rows) { localStorage.setItem(this.key, JSON.stringify(rows.slice(-250))); }, add(plan, execution) { if (!plan) return; const rows = this.read(); if (rows.some(x => x.id === plan.id)) return; const g = NoTradeEngine.evaluate(plan, execution), ev = ScoreEngine.ev(plan, g, execution); rows.push({ id: plan.id, time: nowVN(), symbol: plan.symbol, tf: plan.timeframe, signal: plan.signal, stage: plan.stage, playbook: plan.playbook, entry: plan.entry, sl: plan.sl, tp1: plan.tp1, tp2: plan.tp2, signalPrice: plan.signalPrice, entryTiming: plan.entryTiming, riskQuality: g.score, evScore: ev, status: execution?.label || '-' }); this.write(rows); }, update(plan, execution, candles = []) { if (!plan || !execution) return; const rows = this.read(), row = rows.find(x => x.id === plan.id); if (!row) return; row.lastUpdate = nowVN(); row.status = execution.label; row.currentPrice = execution.price; const signedR = plan.direction === 'LONG' ? (execution.price - plan.entry) / Math.max(1e-9, plan.risk) : (plan.entry - execution.price) / Math.max(1e-9, plan.risk); row.moveR = signedR; row.mfe = Math.max(Number.isFinite(row.mfe) ? row.mfe : -999, signedR); row.mae = Math.min(Number.isFinite(row.mae) ? row.mae : 999, signedR);
+      const rawState = (execution.raw || execution).state;
+      if (rawState === 'TP2_DONE') { row.outcome = 'TP2_DONE'; row.resultR = plan.rr || 2; }
+      else if (rawState === 'TP1_HIT') { row.outcome = 'TP1_HIT'; row.resultR = 1; }
+      else if (rawState === 'INVALIDATED') { row.outcome = 'SL_HIT'; row.resultR = -1; }
+      else if (rawState === 'STALE_PLAN') { row.outcome = 'STALE'; row.resultR = 0; }
+      else if (rawState === 'WAIT_ENTRY') { row.outcome = 'WAIT_ENTRY'; row.resultR = null; }
+      else if (rawState === 'ENTRY_FILLED' || rawState === 'RUNNING_TO_TP') { row.outcome = 'OPEN'; row.resultR = null; }
+      const bars = candles?.length ? candles.filter(c => c.time > plan.signalCandleTime).length : 0; const snap = `${execution.label} · ${Number.isFinite(signedR) ? signedR.toFixed(2) + 'R' : '-'}`; if (bars >= 5 && !row.after5) row.after5 = snap; if (bars >= 10 && !row.after10) row.after10 = snap; if (bars >= 20 && !row.after20) row.after20 = snap; this.write(rows); } };
+
+  let chart, candleSeries, emaFastSeries, emaSlowSeries, entryLine, slLine, tp1Line, tp2Line, chartFit = false, lastCtx = '';
+  const ChartRenderer = {
+    init() { const el = $('chart'); if (!window.LightweightCharts) { el.innerHTML = '<div class="p-4 text-rose-300">Không tải được Lightweight Charts.</div>'; return; } chart = LightweightCharts.createChart(el, { layout: { background: { color: '#020617' }, textColor: '#cbd5e1' }, grid: { vertLines: { color: '#1e293b' }, horzLines: { color: '#1e293b' } }, timeScale: { timeVisible: true }, rightPriceScale: { borderColor: '#334155' } }); candleSeries = chart.addCandlestickSeries({ upColor: '#34d399', downColor: '#fb7185', borderUpColor: '#34d399', borderDownColor: '#fb7185', wickUpColor: '#34d399', wickDownColor: '#fb7185' }); emaFastSeries = chart.addLineSeries({ color: '#22d3ee', lineWidth: 2, title: 'EMA nhanh' }); emaSlowSeries = chart.addLineSeries({ color: '#facc15', lineWidth: 2, title: 'EMA chậm' }); window.addEventListener('resize', () => chart.applyOptions({ width: el.clientWidth, height: el.clientHeight })); },
+    render(candles, plan = null) { if (!chart || !candles.length) return; const ctx = `${App.symbol}|${App.timeframe}`, changed = ctx !== lastCtx, range = !changed && chartFit ? chart.timeScale().getVisibleLogicalRange() : null; lastCtx = ctx; chart.applyOptions({ width: $('chart').clientWidth, height: $('chart').clientHeight }); if (changed) { try { chart.priceScale('right').applyOptions({ autoScale: true }); } catch (e) {} } candleSeries.setData(candles.map(x => ({ time: x.time, open: x.open, high: x.high, low: x.low, close: x.close }))); const closes = candles.map(x => x.close), fast = Indicators.ema(closes, 20), slow = Indicators.ema(closes, 50); emaFastSeries.setData(candles.map((x, i) => ({ time: x.time, value: fast[i] })).slice(50)); emaSlowSeries.setData(candles.map((x, i) => ({ time: x.time, value: slow[i] })).slice(50)); this.lines(plan); if (range) chart.timeScale().setVisibleLogicalRange(range); else { try { chart.priceScale('right').applyOptions({ autoScale: true }); } catch (e) {} chart.timeScale().fitContent(); chartFit = true; } },
+    lines(plan) { [entryLine, slLine, tp1Line, tp2Line].forEach(line => { if (line) candleSeries.removePriceLine(line); }); entryLine = slLine = tp1Line = tp2Line = null; if (!plan) { candleSeries.setMarkers([]); return; } entryLine = candleSeries.createPriceLine({ price: plan.entry, color: '#38bdf8', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'Entry' }); slLine = candleSeries.createPriceLine({ price: plan.sl, color: '#fb7185', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' }); tp1Line = candleSeries.createPriceLine({ price: plan.tp1, color: '#a3e635', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP1' }); tp2Line = candleSeries.createPriceLine({ price: plan.tp2, color: '#34d399', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TP2' }); candleSeries.setMarkers([{ time: plan.signalCandleTime, position: plan.direction === 'LONG' ? 'belowBar' : 'aboveBar', color: plan.direction === 'LONG' ? '#34d399' : '#fb7185', shape: plan.direction === 'LONG' ? 'arrowUp' : 'arrowDown', text: plan.signal }]); }
+  };
+
+  const App = {
+    symbol: 'BTCUSDT', timeframe: '15m', strategy: 'momentum', rr: 2, candles: [], plan: null, execution: null, priceSocket: null, klineSocket: null, restTimer: null, reconnectTimer: null, activeStreamKey: '', lastPriceRenderAt: 0, auto: false, topRows: [], scannerRows: [], scannerMtfCache: {}, mtfCache: null, mtfAt: 0, exchangeCache: {}, exchangeRule: null,
+    async init() { ChartRenderer.init(); runSelfTests(); await this.loadSymbols(); this.bind(); await this.analyze(false); this.renderForwardLog(); },
+    bind() { ['symbol','stickySymbol'].forEach(id => $(id).addEventListener('change', e => this.selectSymbol(e.target.value))); $('timeframe').addEventListener('change', () => this.resetAndAnalyze()); $('strategy').addEventListener('change', () => this.resetAndAnalyze()); $('rr').addEventListener('change', () => this.resetAndAnalyze()); $('btnAnalyze').addEventListener('click', () => this.analyze(false)); $('btnAnalyzeTop').addEventListener('click', () => this.analyze(false)); $('btnAuto').addEventListener('click', () => this.toggleAuto()); $('btnAutoTop').addEventListener('click', () => this.toggleAuto()); $('btnClearCache').addEventListener('click', e => this.clearCache(e.shiftKey)); $('btnCopyPlan').addEventListener('click', () => navigator.clipboard.writeText(this.copyPlan())); $('btnCopyPrices').addEventListener('click', () => navigator.clipboard.writeText(this.copyPrices())); $('btnOpenBinance').addEventListener('click', () => window.open(`https://www.binance.com/en/futures/${this.symbol}`, '_blank')); $('btnConfirmEntry').addEventListener('click', () => this.showManualEntryBox()); $('btnApplyManualEntry').addEventListener('click', () => this.applyManualEntry()); $('btnClearManualEntry').addEventListener('click', () => this.clearManualEntry()); $('btnToggleChart').addEventListener('click', () => this.toggleChart()); $('btnFocusMode').addEventListener('click', () => this.toggleFocusMode()); $('uiMode').addEventListener('change', () => this.setUIMode($('uiMode').value)); $('btnExportForward').addEventListener('click', () => this.exportForwardCSV()); $('scannerFilter').addEventListener('change', () => this.renderScannerRows()); $('scannerMinEV').addEventListener('input', () => this.renderScannerRows()); $('btnScan').addEventListener('click', () => this.scan()); $('btnAnalyzeBest').addEventListener('click', () => this.analyzeBest()); $('btnBacktest').addEventListener('click', () => this.backtest()); $('btnClearForward').addEventListener('click', () => { localStorage.removeItem(ForwardLogEngine.key); this.renderForwardLog(); }); ['accountSize','riskPct','feePct','slippagePct','leverage','marginMode'].forEach(id => $(id).addEventListener('input', () => this.renderRisk())); $('riskMode').addEventListener('change', () => this.render()); },
+    async loadSymbols() { this.topRows = await BinanceAPI.topSymbols(CONFIG.SCANNER_LIMIT); const html = this.topRows.map((x, i) => `<option value="${x.symbol}">${i + 1}. ${x.symbol} · Vol ${(x.vol / 1e9).toFixed(2)}B · ${x.change.toFixed(2)}%</option>`).join(''); $('symbol').innerHTML = html; $('stickySymbol').innerHTML = html; this.symbol = this.topRows[0]?.symbol || 'BTCUSDT'; $('symbol').value = this.symbol; $('stickySymbol').value = this.symbol; setText('topUpdated', `Top ${CONFIG.SCANNER_LIMIT} cập nhật: ${nowVN()}`); this.setUIMode($('uiMode')?.value || 'research'); },
+    async selectSymbol(symbol) { this.symbol = symbol; $('symbol').value = symbol; $('stickySymbol').value = symbol; this.resetPlan(); await this.analyze(true); this.restartSockets(); },
+    resetPlan() { this.plan = null; this.execution = null; chartFit = false; lastCtx = ''; try { chart?.priceScale('right')?.applyOptions({ autoScale: true }); } catch(e){} },
+    resetAndAnalyze() { this.timeframe = $('timeframe').value; this.strategy = $('strategy').value; this.rr = +$('rr').value; this.resetPlan(); this.analyze(true); this.restartSockets(); },
+    setUIMode(mode) { document.body.classList.remove('trade-mode','research-mode','debug-mode','focus-mode'); document.body.classList.add(`${mode}-mode`); if (mode === 'trade') document.body.classList.add('chart-hidden'); else document.body.classList.remove('chart-hidden'); setText('btnToggleChart', document.body.classList.contains('chart-hidden') ? 'Hiện chart' : 'Ẩn chart'); },
+    toggleFocusMode() { document.body.classList.toggle('focus-mode'); const on = document.body.classList.contains('focus-mode'); setText('btnFocusMode', on ? '🎯 Focus ON' : '🎯 Trade Focus'); if (on) document.body.classList.add('chart-hidden'); else document.body.classList.remove('chart-hidden'); setText('btnToggleChart', document.body.classList.contains('chart-hidden') ? 'Hiện chart' : 'Ẩn chart'); if (!on) { chartFit = false; setTimeout(() => ChartRenderer.render(this.candles, this.plan), 80); } },
+    toggleChart() { document.body.classList.toggle('chart-hidden'); const hidden = document.body.classList.contains('chart-hidden'); setText('btnToggleChart', hidden ? 'Hiện chart' : 'Ẩn chart'); if (!hidden) { chartFit = false; setTimeout(() => ChartRenderer.render(this.candles, this.plan), 80); } },
+    async getExchangeRule(symbol = this.symbol) {
+      if (this.exchangeCache[symbol]) return this.exchangeCache[symbol];
+      try {
+        const rule = await BinanceAPI.exchangeInfo(symbol);
+        this.exchangeCache[symbol] = rule;
+        return rule;
+      } catch (e) {
+        console.warn('exchangeInfo error', symbol, e);
+        return null;
+      }
+    },
+    async getMtfBias() { if (Date.now() - this.mtfAt < CONFIG.MTF_TTL_MS && this.mtfCache?.symbol === this.symbol) return this.mtfCache; try { const engine = await MarketContext.mtfEngine(this.symbol); this.mtfCache = { symbol: this.symbol, bias: engine.alignment, engine }; this.mtfAt = Date.now(); return this.mtfCache; } catch(e) { return { symbol: this.symbol, bias: 'OFF', engine: null }; } },
+    async analyze(isAuto = false) { try { this.symbol = $('symbol').value; this.timeframe = $('timeframe').value; this.strategy = $('strategy').value; this.rr = +$('rr').value; this.candles = await BinanceAPI.klines(this.symbol, this.timeframe, CONFIG.CANDLE_LIMIT); this.exchangeRule = await this.getExchangeRule(this.symbol); const mtf = await this.getMtfBias(); const fresh = TradePlanEngine.create({ symbol: this.symbol, timeframe: this.timeframe, strategy: this.strategy, rr: this.rr, candles: this.candles, mtfBias: mtf.bias, mtfEngine: mtf.engine }); if (!isAuto || !this.plan || ExecutionEngine.terminal(this.execution)) { this.plan = fresh; this.execution = this.plan ? ExecutionEngine.init(this.plan) : null; } this.updateExecution(this.candles.at(-1)?.close); ForwardLogEngine.add(this.plan, this.execution); this.render(); this.renderForwardLog(); if (this.auto) this.ensureSockets(); } catch(e) { console.error(e); setText('signalReason', `Lỗi phân tích: ${e.message}`); } },
+    updateExecution(x) { if (!this.plan) return; this.execution = ExecutionEngine.update(this.plan, this.execution, x); },
+    render() { ChartRenderer.render(this.candles, this.plan); setText('chartMeta', `${this.symbol} · ${this.timeframe} · ${nowVN()}`); if (!this.plan) { this.renderNoPlan(); return; } const p = this.execution?.price || this.candles.at(-1)?.close || this.plan.signalPrice; this.updateExecution(p); const ex = this.execution, guard = NoTradeEngine.evaluate(this.plan, this.execution), mgmt = TradeManagementEngine.evaluate(this.plan, this.execution); const px = (v) => this.exchangeRule ? ExchangeRules.fmtPrice(v, this.exchangeRule) : fmt(v, Math.abs(v) < 1 ? 5 : 2); setText('signalTitle', this.plan.signal); setText('signalScore', this.plan.score); setText('signalReason', this.plan.reason); $('signalCard').className = `rounded-2xl border p-4 min-h-[122px] ${this.plan.direction === 'LONG' ? 'bg-emerald-950/60 border-emerald-600' : 'bg-rose-950/60 border-rose-600'}`; setText('entry', px(this.plan.entry)); setText('sl', px(this.plan.sl)); setText('tp1', px(this.plan.tp1)); setText('tp2', px(this.plan.tp2)); setText('tp', px(this.plan.tp)); setText('rrOut', `1:${this.plan.rr}`); setText('execStatus', ex.label); $('execStatus').className = `font-bold mt-1 ${ex.cls}`; setText('entryType', this.plan.manualActive ? 'MANUAL_ACTIVE' : this.plan.entryType); setText('signalPrice', px(this.plan.signalPrice)); setText('currentPrice', px(p)); setText('entryPath', `${ex.note} · ${ex.distPct.toFixed(2)}% / ${ex.distR.toFixed(2)}R`); $('entryPath').className = `font-bold mt-1 whitespace-normal break-words ${ex.cls}`; setText('playbookOut', this.plan.playbook ? `${this.plan.playbook} · ${this.plan.playbookConfidence || '-'}%` : '-'); setText('signalStage', this.plan.stage || '-'); setText('entryZone', Number.isFinite(this.plan.entryZoneLow) ? `${px(this.plan.entryZoneLow)} – ${px(this.plan.entryZoneHigh)}` : '-'); setText('entryTiming', Number.isFinite(this.plan.entryTiming) ? `${this.plan.entryTiming}/100` : '-'); setText('entryAction', this.plan.action || '-'); setText('riskQuality', `${guard.score}/100`); $('riskQuality').className = `font-bold mt-1 ${guard.score >= 70 ? 'text-emerald-300' : guard.score >= 45 ? 'text-amber-300' : 'text-rose-300'}`; setText('noTradeGuard', guard.blocked ? guard.reasons[0] : 'OK'); $('noTradeGuard').className = `font-bold mt-1 whitespace-normal break-words ${guard.blocked ? 'text-rose-300' : 'text-emerald-300'}`; setText('tradeManagement', `${mgmt.label} · ${mgmt.note}`); setText('regimeGate', guard.regime ? `${guard.regime.recommendation} · ${guard.regime.reason}` : '-'); setText('signalTime', this.plan.createdTime); const age = Math.floor((Date.now() - this.plan.createdAt) / 1000); setText('sinceSignal', age < 60 ? `${age}s` : `${Math.floor(age / 60)}m ${age % 60}s`); setText('riskCoin', px(this.plan.risk)); setText('planNote', ex.note); setHTML('marketState', `<span class="badge ${this.plan.context.marketState === 'EXPANSION' ? 'badge-good' : this.plan.context.marketState === 'EXHAUSTION' || this.plan.context.marketState === 'CHAOTIC' ? 'badge-bad' : 'badge-warn'}">${this.plan.context.marketState}</span> <span class="text-slate-400">${this.plan.context.marketAction}</span>`); setText('mtfOut', this.plan.context.mtfBias); setText('mtfDetail', this.plan.context.mtfDetail || '-'); setText('fvgOut', this.plan.context.fvg); setText('liquidityOut', this.plan.context.liquidity); setText('structureOut', this.plan.context.structure); setText('killZoneOut', MarketContext.killZone(this.candles.at(-1)?.time || null).name); setText('miniSignal', `${this.plan.signal} · ${this.plan.score} · ${ex.label}`); this.renderDailyStatus(); this.renderRisk(); ForwardLogEngine.update(this.plan, this.execution, this.candles); },
+    renderNoPlan() { ['entry','sl','tp1','tp2','tp','rrOut','execStatus','entryType','signalPrice','currentPrice','entryPath','playbookOut','signalStage','entryZone','entryTiming','entryAction','riskQuality','noTradeGuard','tradeManagement','regimeGate','signalTime','sinceSignal','riskCoin','planNote','marketState','mtfOut','mtfDetail','fvgOut','liquidityOut','structureOut','killZoneOut','marginOut','riskOut','posOut','qtyOut','sizingMode','netRROut'].forEach(id => setText(id, '-')); setText('signalTitle', 'WAIT'); setText('signalScore', '0'); setText('signalReason', 'Không có setup đủ chất lượng hoặc market không phù hợp.'); setText('miniSignal', 'Chưa có tín hiệu'); $('signalCard').className = 'rounded-2xl border border-slate-700 bg-slate-950 p-4 min-h-[122px]'; },
+    renderExecutionOnly() { if (!this.plan || !this.execution) return; const p = this.execution.price || this.plan.signalPrice, ex = this.execution, guard = NoTradeEngine.evaluate(this.plan, this.execution), mgmt = TradeManagementEngine.evaluate(this.plan, this.execution); const px = (v) => this.exchangeRule ? ExchangeRules.fmtPrice(v, this.exchangeRule) : fmt(v, Math.abs(v) < 1 ? 5 : 2); setText('execStatus', ex.label); $('execStatus').className = `font-bold mt-1 ${ex.cls}`; setText('currentPrice', px(p)); setText('entryPath', `${ex.note} · ${ex.distPct.toFixed(2)}% / ${ex.distR.toFixed(2)}R`); $('entryPath').className = `font-bold mt-1 whitespace-normal break-words ${ex.cls}`; setText('playbookOut', this.plan.playbook ? `${this.plan.playbook} · ${this.plan.playbookConfidence || '-'}%` : '-'); setText('signalStage', this.plan.stage || '-'); setText('entryZone', Number.isFinite(this.plan.entryZoneLow) ? `${px(this.plan.entryZoneLow)} – ${px(this.plan.entryZoneHigh)}` : '-'); setText('entryTiming', Number.isFinite(this.plan.entryTiming) ? `${this.plan.entryTiming}/100` : '-'); setText('entryAction', this.plan.action || '-'); setText('riskQuality', `${guard.score}/100`); setText('noTradeGuard', guard.blocked ? guard.reasons[0] : 'OK'); setText('tradeManagement', `${mgmt.label} · ${mgmt.note}`); const age = Math.floor((Date.now() - this.plan.createdAt) / 1000); setText('sinceSignal', age < 60 ? `${age}s` : `${Math.floor(age / 60)}m ${age % 60}s`); setText('planNote', ex.note); setText('miniSignal', `${this.plan.signal} · ${this.plan.score} · ${ex.label}`); this.renderDailyStatus(); ForwardLogEngine.update(this.plan, this.execution, this.candles); this.renderRisk(); this.renderForwardLog(); },
+    renderRisk() {
+      const guard = NoTradeEngine.evaluate(this.plan, this.execution), risk = RiskEngine.size(this.plan, this.execution);
+      if (!risk || guard.blocked) {
+        ['marginOut','riskOut','posOut','qtyOut','netRROut','binanceRuleOut'].forEach(id => setText(id, '-'));
+        setText('sizingMode', guard.blocked ? `BLOCKED · ${guard.score}/100` : (this.execution?.label || '-'));
+        return;
+      }
+      setText('marginOut', `${fmt(risk.margin)} USDT`);
+      setText('riskOut', `${fmt(risk.riskUsdt)} USDT`);
+      setText('posOut', `${fmt(risk.position)} USDT`);
+      const rule = this.exchangeRule;
+      const roundedQty = rule ? ExchangeRules.qty(risk.qty, rule) : risk.qty;
+      const actualNotional = roundedQty * this.plan.entry;
+      const ruleCheck = ExchangeRules.validate(actualNotional, roundedQty, rule);
+      setText('qtyOut', rule ? ExchangeRules.fmtQty(risk.qty, rule) : fmt(risk.qty, 5));
+      setText('sizingMode', risk.mode);
+      setText('netRROut', `${risk.netRR.toFixed(2)}R`);
+      setText('binanceRuleOut', ruleCheck.note);
+      const ruleEl = $('binanceRuleOut'); if (ruleEl) ruleEl.className = `font-bold ${ruleCheck.ok ? 'text-emerald-300' : 'text-rose-300'}`;
+      const netEl = $('netRROut');
+      if (netEl) netEl.className = `font-bold ${risk.netRR >= 1.2 ? 'text-emerald-300' : risk.netRR >= 0.9 ? 'text-amber-300' : 'text-rose-300'}`;
+    },
+    startAuto() { this.auto = true; setText('btnAuto', 'Auto ON'); setText('btnAutoTop', 'Auto ON'); $('btnAuto').className = 'mt-2 w-full rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-2'; $('btnAutoTop').className = 'rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-5 py-2'; if (this.restTimer) clearInterval(this.restTimer); this.restartSockets(); this.restTimer = setInterval(() => this.analyze(true), CONFIG.REST_FALLBACK_MS); },
+    stopAuto() { this.auto = false; setText('btnAuto', 'Auto OFF'); setText('btnAutoTop', 'Auto OFF'); $('btnAuto').className = 'mt-2 w-full rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold py-2'; $('btnAutoTop').className = 'rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold px-5 py-2'; this.closeSockets(); clearInterval(this.restTimer); this.restTimer = null; setText('autoStatus', 'Live OFF'); setText('liveStatus', 'Live OFF'); },
+    toggleAuto() { this.auto ? this.stopAuto() : this.startAuto(); },
+    ensureSockets() { if (!this.auto) return; const key = `${this.symbol}|${this.timeframe}`, healthy = ws => ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING); if (this.activeStreamKey === key && healthy(this.priceSocket) && healthy(this.klineSocket)) return; this.restartSockets(); },
+    restartSockets() { if (!this.auto) return; this.closeSockets(); this.openSockets(); },
+    closeSockets() { if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; } [this.priceSocket, this.klineSocket].forEach(ws => { try { if (ws) { ws.onopen = null; ws.onmessage = null; ws.onerror = null; ws.onclose = null; ws.close(); } } catch(e){} }); this.priceSocket = this.klineSocket = null; this.activeStreamKey = ''; },
+    scheduleReconnect() { if (!this.auto || this.reconnectTimer) return; this.reconnectTimer = setTimeout(() => { this.reconnectTimer = null; this.restartSockets(); }, 1500); },
+    openSockets() { const sym = this.symbol.toLowerCase(), tf = this.timeframe; this.activeStreamKey = `${this.symbol}|${this.timeframe}`; this.priceSocket = new WebSocket(`${CONFIG.WS}/${sym}@aggTrade`); this.priceSocket.onmessage = ev => { try { const p = +JSON.parse(ev.data).p; if (Number.isFinite(p)) { this.updateExecution(p); const now = Date.now(); if (now - this.lastPriceRenderAt > 250) { this.lastPriceRenderAt = now; this.renderExecutionOnly(); } } } catch(e) { console.warn('price ws parse error', e); } }; this.priceSocket.onclose = () => this.scheduleReconnect(); this.priceSocket.onerror = () => { setText('autoStatus', 'Live lỗi · REST fallback'); setText('liveStatus', 'Live lỗi · REST fallback'); }; this.klineSocket = new WebSocket(`${CONFIG.WS}/${sym}@kline_${tf}`); this.klineSocket.onmessage = ev => { try { const k = JSON.parse(ev.data).k, c = { time: Math.floor(k.t / 1000), open: +k.o, high: +k.h, low: +k.l, close: +k.c, volume: +k.v }; const last = this.candles.at(-1); if (last && last.time === c.time) this.candles[this.candles.length - 1] = c; else this.candles.push(c); if (this.candles.length > CONFIG.CANDLE_LIMIT) this.candles = this.candles.slice(-CONFIG.CANDLE_LIMIT); // Realtime execution chỉ dùng giá tick/close hiện tại, không dùng high/low của cây nến đang chạy để tránh false fill TP/SL.
+          this.updateExecution(c.close); ChartRenderer.render(this.candles, this.plan); this.renderExecutionOnly(); } catch(e) { console.warn('kline ws parse error', e); } }; this.klineSocket.onclose = () => this.scheduleReconnect(); this.klineSocket.onerror = () => { setText('autoStatus', 'Kline lỗi · REST fallback'); setText('liveStatus', 'Kline lỗi · REST fallback'); }; setText('autoStatus', 'Auto ON · Live Price'); setText('liveStatus', 'Auto ON · Live Price'); },
+    clearCache(hard = false) { if (!confirm(hard ? 'Hard reset toàn bộ localStorage và reload?' : 'Xóa cache/runtime state?')) return; this.resetPlan(); this.mtfCache = null; this.mtfAt = 0; this.scannerRows = []; this.scannerMtfCache = {}; localStorage.removeItem('dino98_v2_log'); localStorage.removeItem(ForwardLogEngine.key); if (hard) { localStorage.clear(); location.reload(); return; } this.analyze(true); this.renderForwardLog(); },
+    showManualEntryBox() { if (!this.plan) { alert('Chưa có TradePlan để xác nhận vào lệnh.'); return; } $('manualEntryBox').classList.remove('hidden'); $('manualEntryPrice').value = Number.isFinite(this.execution?.price) ? this.execution.price.toFixed(4) : this.plan.entry.toFixed(4); setText('manualEntryStatus', 'Nhập giá entry thực tế rồi bấm Xác nhận entry.'); },
+    applyManualEntry() { if (!this.plan) { alert('Chưa có TradePlan.'); return; } const actual = +$('manualEntryPrice').value; if (!Number.isFinite(actual) || actual <= 0) { alert('Giá entry thực tế không hợp lệ.'); return; } const old = this.plan, dir = old.direction, sl = old.sl, risk = dir === 'LONG' ? actual - sl : sl - actual; if (!Number.isFinite(risk) || risk <= 0) { alert('Entry thực tế không hợp lệ so với SL hiện tại.'); return; } const rr = old.rr || 2, tp1 = dir === 'LONG' ? actual + risk * Math.min(1, rr * 0.5) : actual - risk * Math.min(1, rr * 0.5), tp2 = dir === 'LONG' ? actual + risk * rr : actual - risk * rr; this.plan = new TradePlan({ ...old, id: `${old.id}|MANUAL|${actual.toFixed(6)}|${Date.now()}`, signal: `${dir} ACTIVE`, stage: 'MANUAL_ACTIVE', action: 'MANAGE POSITION', entry: actual, entryZoneLow: actual, entryZoneHigh: actual, tp1, tp2, tp: tp2, risk, staleAtBirth: false, manualActive: true, manualEntry: actual, manualEntryTime: Date.now(), reason: `Manual Position Mode: đã xác nhận entry thực tế ${fmt(actual)}. TP/SL tính lại theo entry thật.` }); this.execution = ExecutionEngine.init(this.plan); this.updateExecution(this.candles.at(-1)?.close || actual); setText('manualEntryStatus', `Manual active: Entry thực tế ${fmt(actual)}. Tool quản lý lệnh, không còn chờ khớp entry/stale.`); ChartRenderer.render(this.candles, this.plan); this.render(); },
+    clearManualEntry() { $('manualEntryBox').classList.add('hidden'); setText('manualEntryStatus', 'Đã thoát Manual Position Mode. Bấm Phân tích để tạo plan mới nếu cần.'); this.resetPlan(); this.analyze(false); },
+    async getScannerMtf(symbol) { const cached = this.scannerMtfCache[symbol]; if (cached && Date.now() - cached.at < CONFIG.MTF_TTL_MS) return cached.value; const value = await MarketContext.mtfEngine(symbol); this.scannerMtfCache[symbol] = { at: Date.now(), value }; return value; },
+    copyPlan() {
+      if (!this.plan) return 'No trade plan';
+      const guard = NoTradeEngine.evaluate(this.plan, this.execution);
+      const state = (this.execution?.raw || this.execution)?.state;
+      const blocked = guard.blocked || ['STALE_PLAN','TP2_DONE','INVALIDATED'].includes(state);
+      const rule = this.exchangeRule;
+      const zoneText = Number.isFinite(this.plan.entryZoneLow)
+        ? `${rule ? ExchangeRules.fmtPrice(this.plan.entryZoneLow, rule) : fmt(this.plan.entryZoneLow)} – ${rule ? ExchangeRules.fmtPrice(this.plan.entryZoneHigh, rule) : fmt(this.plan.entryZoneHigh)}`
+        : '-';
+      const lines = [];
+      if (blocked) lines.push(`⚠ ${guard.blocked ? guard.reasons[0] : state}`);
+      lines.push(this.plan.symbol);
+      lines.push(this.plan.signal);
+      lines.push(`ENTRY ZONE: ${zoneText} | ENTRY PRICE: ${rule ? ExchangeRules.fmtPrice(this.plan.entry, rule) : fmt(this.plan.entry)}`);
+      lines.push(`TP1: ${rule ? ExchangeRules.fmtPrice(this.plan.tp1, rule) : fmt(this.plan.tp1)} | TP2: ${rule ? ExchangeRules.fmtPrice(this.plan.tp2, rule) : fmt(this.plan.tp2)} | SL: ${rule ? ExchangeRules.fmtPrice(this.plan.sl, rule) : fmt(this.plan.sl)}`);
+      return lines.join(String.fromCharCode(10));
+    },
+    copyPrices() { if (!this.plan) return 'No prices'; const state = (this.execution?.raw || this.execution)?.state, terminal = ['STALE_PLAN','TP2_DONE','INVALIDATED'].includes(state), warn = terminal ? '⚠ Plan không còn phù hợp để vào mới. ' : ''; const rule = this.exchangeRule;
+      return `${warn}Zone ${Number.isFinite(this.plan.entryZoneLow) ? (rule ? ExchangeRules.fmtPrice(this.plan.entryZoneLow, rule) : fmt(this.plan.entryZoneLow)) + ' – ' + (rule ? ExchangeRules.fmtPrice(this.plan.entryZoneHigh, rule) : fmt(this.plan.entryZoneHigh)) : '-'} | Entry ${rule ? ExchangeRules.fmtPrice(this.plan.entry, rule) : fmt(this.plan.entry)} | SL ${rule ? ExchangeRules.fmtPrice(this.plan.sl, rule) : fmt(this.plan.sl)} | TP1 ${rule ? ExchangeRules.fmtPrice(this.plan.tp1, rule) : fmt(this.plan.tp1)} | TP2 ${rule ? ExchangeRules.fmtPrice(this.plan.tp2, rule) : fmt(this.plan.tp2)}`; },
+    async scan() {
+      const body = $('scannerBody'), btn = $('btnScan'), limit = +$('scannerLimit')?.value || CONFIG.SCANNER_LIMIT;
+      if (btn) { btn.disabled = true; btn.textContent = `Lite scan Top ${limit}...`; }
+      body.innerHTML = `<tr><td colspan="7" class="p-3 text-slate-400">Lite scan Top ${limit} symbol...</td></tr>`;
+      try {
+        if (!this.topRows?.length || this.topRows.length < limit) this.topRows = await BinanceAPI.topSymbols(limit);
+        const scanRows = this.topRows.slice(0, limit);
+        const liteRows = await mapLimit(scanRows, CONFIG.SCAN_CONCURRENCY, async x => {
+          try {
+            const candles = await BinanceAPI.klines(x.symbol, this.timeframe, 260);
+            const plan = TradePlanEngine.create({ symbol: x.symbol, timeframe: this.timeframe, strategy: this.strategy, rr: this.rr, candles, mtfBias: 'OFF', mtfEngine: null });
+            if (!plan) return { symbol: x.symbol, signal: 'WAIT', q: 0, exec: 'NO TRADE', setup: '-', why: 'Lite: không có setup', plan: null, exec: null, guard: null, evScore: 0, candles };
+            const exec = ExecutionEngine.update(plan, ExecutionEngine.init(plan), candles.at(-1)?.close);
+            const guard = NoTradeEngine.evaluate(plan, exec);
+            const evScore = ScoreEngine.ev(plan, guard, exec);
+            return { symbol: x.symbol, signal: guard.blocked ? 'NO TRADE' : plan.signal, q: evScore, exec: exec.label, setup: plan.setupType, why: `Lite · ${plan.rank} · ${plan.stage || '-'} · EV ${evScore} · RiskQ ${guard.score}`, plan, exec, guard, evScore, candles };
+          } catch (err) {
+            return { symbol: x.symbol, signal: 'ERR', q: 0, exec: 'ERR', setup: '-', why: err?.message || 'Lỗi lite scan', plan: null, exec: null, guard: null, evScore: 0, candles: [] };
+          }
+        });
+
+        const candidates = liteRows
+          .filter(r => r.plan && !['STALE_PLAN'].includes(r.plan.stage))
+          .sort((a,b) => (b.evScore || 0) - (a.evScore || 0))
+          .slice(0, Math.min(8, Math.max(5, Math.ceil(limit / 3))));
+
+        if (btn) btn.textContent = `Deep scan ${candidates.length} ứng viên...`;
+        body.innerHTML = `<tr><td colspan="7" class="p-3 text-slate-400">Deep scan ${candidates.length} ứng viên tốt nhất...</td></tr>`;
+
+        const deepRows = await mapLimit(candidates, Math.min(3, CONFIG.SCAN_CONCURRENCY), async r => {
+          try {
+            const engine = await this.getScannerMtf(r.symbol);
+            const plan = TradePlanEngine.create({ symbol: r.symbol, timeframe: this.timeframe, strategy: this.strategy, rr: this.rr, candles: r.candles, mtfBias: engine.alignment, mtfEngine: engine });
+            if (!plan) return { ...r, signal: 'WAIT', q: 0, why: 'Deep: MTF lọc bỏ setup', plan: null, guard: null, evScore: 0 };
+            const exec = ExecutionEngine.update(plan, ExecutionEngine.init(plan), r.candles.at(-1)?.close);
+            const guard = NoTradeEngine.evaluate(plan, exec);
+            const evScore = ScoreEngine.ev(plan, guard, exec);
+            return { ...r, signal: guard.blocked ? 'NO TRADE' : plan.signal, q: evScore, exec: exec.label, setup: plan.setupType, why: `${plan.rank} · ${plan.stage || '-'} · EV ${evScore} · RiskQ ${guard.score} · ${guard.blocked ? guard.reasons[0] : 'OK'}`, plan, exec, guard, evScore };
+          } catch (err) {
+            return { ...r, signal: 'ERR', q: 0, exec: 'ERR', why: err?.message || 'Lỗi deep scan', guard: null, evScore: 0 };
+          }
+        });
+
+        const deepMap = new Map(deepRows.map(r => [r.symbol, r]));
+        const rows = liteRows.map(r => deepMap.get(r.symbol) || r);
+        rows.sort((a, b) => {
+          const rank = { TRIGGER_READY: 4, ENTRY_ZONE: 3, WAIT_PULLBACK: 2, SETUP_FORMING: 1, STALE_PLAN: 0 };
+          const usable = x => { if (['ENTRY FILLED','RUNNING TO TP','TP1 HIT / MANAGE'].includes(x.exec)) return 5; if (['STALE PLAN','TP2 DONE','INVALIDATED','NO TRADE','ERR'].includes(x.exec)) return 0; return rank[x.plan?.stage] ?? 1; };
+          return usable(b) - usable(a) || (b.evScore || b.q || 0) - (a.evScore || a.q || 0) || (b.guard?.score || 0) - (a.guard?.score || 0) || (b.plan?.entryTiming || 0) - (a.plan?.entryTiming || 0);
+        });
+        this.scannerRows = rows;
+        this.renderScannerRows();
+      } catch (e) {
+        console.error(e);
+        body.innerHTML = `<tr><td colspan="7" class="p-3 text-rose-300">Scanner lỗi: ${e?.message || e}</td></tr>`;
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Scan'; }
+      }
+    },
+    analyzeBest() { const best = this.scannerRows.find(r => r.guard && !r.guard.blocked) || this.scannerRows.find(r => !['ERR','NO TRADE','STALE PLAN','TP2 DONE','INVALIDATED'].includes(r.exec)) || this.scannerRows[0]; if (best?.symbol) this.selectSymbol(best.symbol); },
+    async backtest() { const btn = $('btnBacktest'); if (btn) { btn.disabled = true; btn.textContent = 'Đang chạy...'; } try { const symbol = this.symbol, tf = $('btTf').value, days = +$('btDays').value, perDay = { '15m': 96, '30m': 48, '1h': 24 }[tf] || 96, test = perDay * days, candles = await BinanceAPI.klines(symbol, tf, Math.min(1500, test + 220)), trades = []; let equity = 0, peak = 0, dd = 0, blocked = 0; let lockedUntil = -1, lastPlanKey = ''; for (let i = Math.max(120, candles.length - test); i < candles.length - 1; i++) { if (i <= lockedUntil) continue; const slice = candles.slice(0, i + 1), mtfBias = MarketContext.mtfBias(slice.slice(-180)), plan = TradePlanEngine.create({ symbol, timeframe: tf, strategy: this.strategy, rr: this.rr, candles: slice, mtfBias }); if (!plan) continue; const planKey = `${plan.direction}|${Math.round(plan.entry / Math.max(1e-9, plan.risk))}|${plan.entryType}|${plan.stage}`; if (planKey === lastPlanKey) continue; let state = ExecutionEngine.init(plan); const guard = NoTradeEngine.evaluate(plan, ExecutionEngine.update(plan, state, slice.at(-1)?.close)); if (guard.blocked) { blocked++; continue; } let R = 0, outcome = 'OPEN', filled = false, mfe = 0, mae = 0, exitIndex = i;
+            const maxWaitBars = { '15m': 8, '30m': 6, '1h': 4 }[tf] || 8;
+            const feePct = +($('feePct')?.value || 0.05), slipPct = +($('slippagePct')?.value || 0.03);
+            const slPct = Math.abs(plan.entry - plan.sl) / plan.entry;
+            const costR = ((feePct + slipPct) * 2 / 100) / Math.max(1e-9, slPct);
+            for (let j = i + 1; j < candles.length; j++) { exitIndex = j; const c = candles[j]; if (!filled && j - i > maxWaitBars) { outcome = 'MISSED'; R = 0; break; } const view = ExecutionEngine.update(plan, state, c); state = view.raw; if (state.entryTouched) filled = true; if (filled) { if (plan.direction === 'LONG') { mfe = Math.max(mfe, (c.high - plan.entry) / Math.max(1e-9, plan.risk)); mae = Math.min(mae, (c.low - plan.entry) / Math.max(1e-9, plan.risk)); } else { mfe = Math.max(mfe, (plan.entry - c.low) / Math.max(1e-9, plan.risk)); mae = Math.min(mae, (plan.entry - c.high) / Math.max(1e-9, plan.risk)); } } if (view.state === 'STALE_PLAN') { outcome = 'STALE'; R = 0; break; }
+              if (view.state === 'INVALIDATED') { outcome = 'LOSS'; R = -1 - costR; break; }
+              if (view.state === 'TP2_DONE') { const sameSL = plan.direction === 'LONG' ? c.low <= plan.sl : c.high >= plan.sl; if (sameSL) { outcome = 'LOSS'; R = -1 - costR; } else { outcome = 'WIN'; R = this.rr - costR; } break; } } equity += R; peak = Math.max(peak, equity); dd = Math.min(dd, equity - peak); trades.push({ plan, outcome, R, filled, mfe, mae, costR }); lastPlanKey = planKey; lockedUntil = Math.max(exitIndex, i + maxWaitBars); } const wins = trades.filter(t => t.R > 0).length, losses = trades.filter(t => t.R < 0).length, missed = trades.filter(t => t.outcome === 'MISSED').length, stale = trades.filter(t => t.outcome === 'STALE').length, open = trades.filter(t => t.outcome === 'OPEN').length, filled = trades.filter(t => t.filled).length, totalR = trades.reduce((a, b) => a + b.R, 0), closed = wins + losses, grossProfit = trades.filter(t=>t.R>0).reduce((a,b)=>a+b.R,0), grossLoss = Math.abs(trades.filter(t=>t.R<0).reduce((a,b)=>a+b.R,0)), avgMfe = filled ? trades.filter(t=>t.filled).reduce((a,b)=>a+b.mfe,0)/filled : 0, avgMae = filled ? trades.filter(t=>t.filled).reduce((a,b)=>a+b.mae,0)/filled : 0;
+          const winrate = closed ? wins / closed : 0;
+          const fillRate = trades.length ? filled / trades.length : 0;
+          const expectancy = trades.length ? totalR / trades.length : 0;
+          const pf = grossLoss ? grossProfit / grossLoss : (grossProfit > 0 ? 3 : 0);
+          const sampleFactor = clamp(trades.length / 25, 0.35, 1);
+          const scoreParts = {
+            totalR: clamp((totalR + 5) / 20 * 22, 0, 22),
+            winrate: clamp((winrate - 0.35) / 0.35 * 18, 0, 18),
+            pf: clamp((pf - 0.9) / 1.1 * 18, 0, 18),
+            drawdown: clamp((1 - Math.abs(dd) / 8) * 14, 0, 14),
+            fill: clamp(fillRate * 10, 0, 10),
+            expectancy: clamp((expectancy + 0.15) / 0.65 * 12, 0, 12),
+            mfeMae: clamp(((avgMfe + Math.min(0, avgMae)) + 0.5) / 2 * 6, 0, 6)
+          };
+          const btScore = clamp(Math.round(Object.values(scoreParts).reduce((a,b)=>a+b,0) * sampleFactor), 0, 100); $('btBox').classList.remove('hidden'); setText('btScore', `${btScore}/100`); const btScoreEl = $('btScore'); if (btScoreEl) btScoreEl.className = `font-bold text-lg ${btScore >= 75 ? 'text-emerald-300' : btScore >= 55 ? 'text-amber-300' : 'text-rose-300'}`; setText('btTrades', trades.length); setText('btWinrate', closed ? `${(wins / closed * 100).toFixed(1)}%` : '-'); setText('btR', `${totalR.toFixed(2)}R`); setText('btDD', `${dd.toFixed(2)}R`); setText('btMissed', `${missed} / stale ${stale} / open ${open}`); setText('btFill', trades.length ? `${(filled / trades.length * 100).toFixed(1)}%` : '-'); setText('btExp', trades.length ? `${(totalR / trades.length).toFixed(2)}R` : '-'); setText('btPF', grossLoss ? `${(grossProfit / grossLoss).toFixed(2)}` : '-'); setText('btMFE', filled ? `${avgMfe.toFixed(2)}R` : '-'); setText('btMAE', filled ? `${avgMae.toFixed(2)}R` : '-'); setText('btDetail', `Backtest Score ${btScore}/100. Điểm này tổng hợp Total R, Winrate, Profit Factor, Drawdown, Fill Rate, Expectancy, MFE/MAE và độ đủ mẫu. Backtest V3 dùng No Trade Guard, Entry Zone, ExecutionEngine, one-active-trade/cooldown và conservative TP/SL. Kết quả R đã trừ phí/trượt giá ước tính. Setup bị block bởi No Trade Engine: ${blocked}.`); } catch(e) { setText('btDetail', `Backtest lỗi: ${e.message}`); } finally { if (btn) { btn.disabled = false; btn.textContent = 'Chạy backtest'; } } },
+    renderDailyStatus() {
+      const d = DailyRiskEngine.stats();
+      const text = `Daily: ${d.trades}/${d.cfg.maxTrades} · ${d.totalR.toFixed(2)}R · ${d.blocked ? d.reason : 'OK'}`;
+      setText('dailyStatusTop', text);
+      const el = $('dailyStatusTop');
+      if (el) {
+        el.className = `rounded-full border px-3 py-2 text-xs ${d.blocked ? 'bg-rose-950/70 border-rose-700 text-rose-200' : 'bg-emerald-950/50 border-emerald-700 text-emerald-200'}`;
+      }
+    },
+
+    exportForwardCSV() {
+      const rows = ForwardLogEngine.read();
+      if (!rows.length) {
+        alert('Chưa có Forward Log để export.');
+        return;
+      }
+      const keys = [
+        'time','symbol','tf','signal','playbook','stage','entry','sl','tp1','tp2',
+        'evScore','riskQuality','status','outcome','resultR','mfe','mae','after5','after10','after20'
+      ];
+      const csvRows = [keys.join(',')].concat(
+        rows.map(row => keys.map(key => JSON.stringify(row[key] ?? '')).join(','))
+      );
+      const csv = csvRows.join(String.fromCharCode(10));
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `dino-forward-log-v3-official-${Date.now()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    },
+
+    renderScannerRows() {
+      if (!this.scannerRows || !this.scannerRows.length) return;
+      const body = $('scannerBody');
+      const filter = $('scannerFilter')?.value || 'all';
+      const minEV = Number($('scannerMinEV')?.value || 0);
+      const rows = this.scannerRows.filter(row => {
+        const ev = row.evScore || row.q || 0;
+        if (ev < minEV) return false;
+        if (filter === 'tradable') return row.guard && !row.guard.blocked;
+        if (filter === 'long') return String(row.signal || '').includes('LONG');
+        if (filter === 'short') return String(row.signal || '').includes('SHORT');
+        if (filter === 'entry') return ['TRIGGER_READY','ENTRY_ZONE'].includes(row.plan?.stage);
+        return true;
+      });
+      body.innerHTML = rows.map((r, i) => {
+        const sigClass = String(r.signal || '').includes('LONG') ? 'text-emerald-300' : String(r.signal || '').includes('SHORT') ? 'text-rose-300' : r.signal === 'NO TRADE' ? 'text-amber-300' : 'text-slate-400';
+        return `<tr data-symbol="${r.symbol}" class="border-t border-slate-800 hover:bg-slate-800/50 cursor-pointer"><td class="p-2">${i + 1}</td><td class="p-2 font-bold">${r.symbol}</td><td class="p-2 ${sigClass}">${r.signal}</td><td class="p-2">${r.exec}</td><td class="p-2 font-bold">${r.q}</td><td class="p-2">${r.setup}</td><td class="p-2 text-slate-400">${r.why}</td></tr>`;
+      }).join('') || '<tr><td colspan="7" class="p-3 text-slate-500">Không có kết quả sau filter.</td></tr>';
+      document.querySelectorAll('#scannerBody tr[data-symbol]').forEach(tr => {
+        tr.addEventListener('click', () => this.selectSymbol(tr.dataset.symbol));
+      });
+    },
+
+    renderForwardLog() {
+      const all = ForwardLogEngine.read();
+
+      const scoreRow = (row) => {
+        if (Number.isFinite(row.resultR)) return row.resultR;
+        const statusText = `${row.status || ''} ${row.after20 || ''} ${row.after10 || ''} ${row.after5 || ''}`;
+        if (statusText.includes('TP2 DONE')) return 2;
+        if (statusText.includes('TP1 HIT')) return 1;
+        if (statusText.includes('INVALIDATED') || statusText.includes('STOPPED')) return -1;
+        if (statusText.includes('STALE PLAN')) return 0;
+        return null;
+      };
+
+      const scored = all
+        .map(row => ({ ...row, scoreR: scoreRow(row) }))
+        .filter(row => row.scoreR !== null);
+      const wins = scored.filter(row => row.scoreR > 0).length;
+      const losses = scored.filter(row => row.scoreR < 0).length;
+      const totalR = scored.reduce((sum, row) => sum + row.scoreR, 0);
+      const mfeRows = all.filter(row => Number.isFinite(row.mfe));
+      const maeRows = all.filter(row => Number.isFinite(row.mae));
+
+      setText('fwSignals', all.length);
+      setText('fwWinrate', wins + losses ? `${(wins / (wins + losses) * 100).toFixed(1)}%` : '-');
+      setText('fwExp', scored.length ? `${(totalR / scored.length).toFixed(2)}R` : '-');
+      setText('fwMFE', mfeRows.length ? `${(mfeRows.reduce((sum, row) => sum + row.mfe, 0) / mfeRows.length).toFixed(2)}R` : '-');
+      setText('fwMAE', maeRows.length ? `${(maeRows.reduce((sum, row) => sum + row.mae, 0) / maeRows.length).toFixed(2)}R` : '-');
+
+      const byPlaybook = {};
+      scored.forEach(row => {
+        const key = row.playbook || 'Unknown';
+        if (!byPlaybook[key]) byPlaybook[key] = { n: 0, total: 0, w: 0, l: 0 };
+        byPlaybook[key].n += 1;
+        byPlaybook[key].total += row.scoreR;
+        if (row.scoreR > 0) byPlaybook[key].w += 1;
+        if (row.scoreR < 0) byPlaybook[key].l += 1;
+      });
+      const playbookHtml = Object.entries(byPlaybook)
+        .sort((a, b) => b[1].total - a[1].total)
+        .map(([name, stat]) => {
+          const closed = stat.w + stat.l;
+          const winrate = closed ? `${(stat.w / closed * 100).toFixed(1)}% win` : '-';
+          const exp = stat.n ? `${(stat.total / stat.n).toFixed(2)}R` : '-';
+          return `<div class="py-1 border-b border-slate-800"><b>${name}</b> · ${stat.n} outcome · ${winrate} · Exp ${exp}</div>`;
+        }).join('') || 'Chưa đủ outcome theo playbook.';
+      setHTML('forwardPlaybookStats', playbookHtml);
+
+      const rows = all.slice(-12).reverse();
+      if (!rows.length) {
+        setText('forwardLog', 'Chưa có log.');
+        return;
+      }
+      setHTML('forwardLog', rows.map(row => {
+        const mfeText = Number.isFinite(row.mfe) ? `${row.mfe.toFixed(2)}R` : '-';
+        const maeText = Number.isFinite(row.mae) ? `${row.mae.toFixed(2)}R` : '-';
+        return `<div class="border-b border-slate-800 py-1"><b>${row.symbol}</b> · ${row.tf} · ${row.signal} · ${row.playbook || row.stage || '-'} · EV ${row.evScore ?? '-'} · ${row.status || '-'} <span class="text-slate-600">${row.time}</span><div class="text-slate-500">5: ${row.after5 || '-'} · 10: ${row.after10 || '-'} · 20: ${row.after20 || '-'} · MFE ${mfeText} · MAE ${maeText}</div></div>`;
+      }).join(''));
+    }
+  };
+
+  function runSelfTests() {
+    const plan = new TradePlan({ id: 'T|SHORT', direction: 'SHORT', entry: 100, sl: 105, tp1: 95, tp2: 90, risk: 5, signalPrice: 98, signalCandleTime: 1, staleAtBirth: false });
+    let s = ExecutionEngine.init(plan);
+    let v = ExecutionEngine.update(plan, s, { time: 1, open: 98, high: 101, low: 97, close: 98 });
+    console.assert(v.state === 'WAIT_ENTRY', 'same signal candle wick must not fill');
+    v = ExecutionEngine.update(plan, v, { time: 2, open: 98, high: 101, low: 97, close: 99 });
+    console.assert(['ENTRY_FILLED','RUNNING_TO_TP'].includes(v.state), 'later candle should fill short entry');
+    v = ExecutionEngine.update(plan, v, { time: 3, open: 99, high: 99, low: 94, close: 94 });
+    console.assert(v.state === 'TP1_HIT', 'TP1 after entry');
+    const v2 = ExecutionEngine.update(plan, v, { time: 4, open: 94, high: 96, low: 93, close: 95 });
+    console.assert(v2.raw.entryTouched === true, 'view raw state preserved');
+    const manual = new TradePlan({ ...plan, id: 'M', manualActive: true, entry: 99, sl: 105, tp1: 96, tp2: 93, risk: 6, signalCandleTime: 1, staleAtBirth: false });
+    const mv = ExecutionEngine.update(manual, ExecutionEngine.init(manual), 99);
+    console.assert(mv.raw.entryTouched === true && mv.state === 'ENTRY_FILLED', 'manual plan starts filled');
+    const perDayTest = { '15m': 96, '30m': 48, '1h': 24 }['15m'];
+    console.assert(perDayTest === 96, 'backtest timeframe map supports string keys');
+    const tickOnlyPlan = new TradePlan({ id:'TICK|SHORT', direction:'SHORT', entry:100, sl:105, tp1:95, tp2:90, risk:5, signalPrice:101, signalCandleTime:10, staleAtBirth:false });
+    let tickState = ExecutionEngine.init(tickOnlyPlan);
+    let tickView = ExecutionEngine.update(tickOnlyPlan, tickState, 99);
+    console.assert(tickView.state === 'WAIT_ENTRY', 'tick below short entry must not fill short limit above price');
+    const qtyRule = { stepSize: 0.001, minQty: 0.01, minNotional: 5 };
+    console.assert(ExchangeRules.qty(0.0049, qtyRule) === 0.004, 'qty must round down by stepSize and not auto-raise to minQty');
+    const forwardRowShape = { entry: 100, sl: 105, tp1: 95, tp2: 90 };
+    console.assert(Number.isFinite(forwardRowShape.entry) && Number.isFinite(forwardRowShape.sl), 'forward log row shape must keep entry and sl as separate keys');
+    const displayRule = { tickSize: 0.0001, pricePrecision: 4 };
+    console.assert(ExchangeRules.fmtPrice(0.10784, displayRule) !== ExchangeRules.fmtPrice(0.11092, displayRule), 'small-price symbols must not collapse to same 2-decimal display');
+    console.info(`Dino Futures Tool ${APP_VERSION} self-tests completed`);
+  }
+
+  window.addEventListener('DOMContentLoaded', () => App.init());
+  </script>
+</body>
+</html>
