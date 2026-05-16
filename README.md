@@ -474,7 +474,7 @@ main branch / root
 Live URL:
 
 ```text
-https://dino6298.github.io/btc_analyzer/
+https://dino6298.github.io/btcanalyzerdino
 ```
 
 ---
@@ -484,7 +484,7 @@ https://dino6298.github.io/btc_analyzer/
 Recommended structure:
 
 ```text
-btc_analyzer/
+btcanalyzerdino/
 │
 ├── index.html
 ├── README.md
@@ -594,3 +594,10 @@ Built by Dino.
 ```text
 Watermark: dino98
 ```
+
+Copyright (c) 2026 Dino
+
+All rights reserved.
+
+This software is provided for personal research and educational use only.
+No part of this project may be copied, modified, redistributed, sold, or used commercially without explicit permission from the author.
