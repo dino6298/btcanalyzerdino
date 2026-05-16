@@ -126,3 +126,37 @@ Scan Top 25
 → Check Net RR
 → Copy plan
 → Forward test result
+
+
+Tech Stack
+HTML
+Vanilla JavaScript
+Tailwind CDN
+Lightweight Charts
+Binance Futures public market data API
+Deployment
+
+This project is deployed with GitHub Pages.
+
+Main file:
+
+index.html
+
+GitHub Pages source:
+
+main branch / root
+Version
+Version: V3 Official
+Build: 2026-05-16
+Execution: Manual only
+Disclaimer
+
+This project is for research, education, backtesting, forward testing and trading decision support only.
+
+It is not financial advice.
+
+Crypto futures trading is highly risky. Always manage risk carefully and never trade with money you cannot afford to lose.
+
+Author
+
+Built by Dino.
