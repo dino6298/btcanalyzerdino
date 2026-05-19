@@ -646,13 +646,75 @@
     }
   };
 
+  const FeedbackEngine = {
+    minSamples: 8,
+    readRows() { return SignalJournalEngine.read().filter(r => Number.isFinite(r.resultR)); },
+    groupStats(keyFn) {
+      const groups = {};
+      this.readRows().forEach(r => {
+        const k = keyFn(r) || 'Unknown';
+        groups[k] = groups[k] || { n: 0, totalR: 0, wins: 0, losses: 0 };
+        groups[k].n += 1;
+        groups[k].totalR += r.resultR;
+        if (r.resultR > 0) groups[k].wins += 1;
+        if (r.resultR < 0) groups[k].losses += 1;
+      });
+      Object.values(groups).forEach(g => {
+        g.exp = g.n ? g.totalR / g.n : 0;
+        g.winrate = (g.wins + g.losses) ? g.wins / (g.wins + g.losses) : null;
+      });
+      return groups;
+    },
+    scoreFromStat(stat, weight = 1) {
+      if (!stat || stat.n < this.minSamples) return 0;
+      let adj = 0;
+      if (stat.exp >= 0.35) adj += 6;
+      else if (stat.exp >= 0.15) adj += 3;
+      else if (stat.exp <= -0.35) adj -= 8;
+      else if (stat.exp <= -0.15) adj -= 4;
+      if (stat.winrate !== null) {
+        if (stat.winrate >= 0.58) adj += 3;
+        else if (stat.winrate <= 0.40) adj -= 3;
+      }
+      const sampleScale = clamp(stat.n / 30, 0.5, 1.25);
+      return Math.round(adj * sampleScale * weight);
+    },
+    adjustment(plan) {
+      if (!plan) return { adj: 0, notes: [] };
+      const pb = this.groupStats(r => r.playbook);
+      const sym = this.groupStats(r => r.symbol);
+      const tf = this.groupStats(r => r.tf);
+      const parts = [
+        { label: `Playbook ${plan.playbook}`, stat: pb[plan.playbook], weight: 1.0 },
+        { label: `Symbol ${plan.symbol}`, stat: sym[plan.symbol], weight: 0.7 },
+        { label: `Timeframe ${plan.timeframe}`, stat: tf[plan.timeframe], weight: 0.5 }
+      ];
+      let adj = 0;
+      const notes = [];
+      parts.forEach(p => {
+        const a = this.scoreFromStat(p.stat, p.weight);
+        adj += a;
+        if (p.stat && p.stat.n >= this.minSamples && a !== 0) {
+          notes.push(`${p.label}: ${a > 0 ? '+' : ''}${a} EV · ${p.stat.n} mẫu · Exp ${p.stat.exp.toFixed(2)}R`);
+        }
+      });
+      return { adj: clamp(adj, -15, 12), notes };
+    },
+    summary(plan) {
+      const f = this.adjustment(plan);
+      if (!f.notes.length) return 'Feedback: chưa đủ mẫu để điều chỉnh EV';
+      return `Feedback EV ${f.adj > 0 ? '+' : ''}${f.adj}: ${f.notes.join(' | ')}`;
+    }
+  };
+
   const ScoreEngine = {
     ev(plan, guard, execution) {
       if (!plan || !guard) return 0;
       const stageBonus = { TRIGGER_READY: 14, ENTRY_ZONE: 10, WAIT_PULLBACK: 4, SETUP_FORMING: -4, STALE_PLAN: -40, MANUAL_ACTIVE: 8 }[plan.stage] || 0;
       const execBonus = ['ENTRY FILLED','RUNNING TO TP','TP1 HIT / MANAGE'].includes(execution?.label) ? 10 : 0;
       const blockedPenalty = guard.blocked ? 35 : 0;
-      const ev = plan.score * 0.28 + (plan.entryTiming || 0) * 0.22 + guard.score * 0.40 + stageBonus + execBonus - blockedPenalty;
+      const feedback = FeedbackEngine.adjustment(plan);
+      const ev = plan.score * 0.28 + (plan.entryTiming || 0) * 0.22 + guard.score * 0.40 + stageBonus + execBonus - blockedPenalty + feedback.adj;
       return clamp(Math.round(ev), 0, 100);
     }
   };
@@ -810,18 +872,48 @@
     write(rows) { localStorage.setItem(this.key, JSON.stringify(rows.slice(-1000))); if (window.__DINO_APP_READY__) CloudSyncEngine.queuePush(); },
     makeId(plan) {
       if (!plan) return '';
-      const bucket = Math.floor((plan.createdAt || Date.now()) / (5 * 60 * 1000));
-      return `${plan.symbol}|${plan.timeframe}|${plan.direction}|${plan.playbook || plan.entryType}|${plan.stage}|${bucket}|${Number(plan.entry).toFixed(8)}|${Number(plan.sl).toFixed(8)}`;
+      const candleBucket = plan.signalCandleTime || Math.floor((plan.createdAt || Date.now()) / 1000);
+      const entryKey = this.priceKey(plan.entry);
+      const slKey = this.priceKey(plan.sl);
+      const tp2Key = this.priceKey(plan.tp2);
+      return `${plan.symbol}|${plan.timeframe}|${plan.direction}|${plan.playbook || plan.entryType}|${candleBucket}|${entryKey}|${slKey}|${tp2Key}`;
+    },
+    priceKey(price) {
+      const p = Number(price);
+      if (!Number.isFinite(p) || p <= 0) return '0';
+      if (p < 1) return p.toFixed(4);
+      if (p < 100) return p.toFixed(3);
+      if (p < 10000) return p.toFixed(2);
+      return p.toFixed(1);
+    },
+    isSameSignal(row, plan) {
+      if (!row || !plan) return false;
+      if (row.symbol !== plan.symbol || row.tf !== plan.timeframe || row.direction !== plan.direction) return false;
+      if ((row.playbook || '') !== (plan.playbook || '')) return false;
+      const tfSec = { '5m': 300, '15m': 900, '30m': 1800, '1h': 3600 }[plan.timeframe] || 900;
+      const sameCandle = Math.abs(Number(row.signalCandleTime || 0) - Number(plan.signalCandleTime || 0)) <= tfSec;
+      const entryTol = Math.abs(Number(row.entry) - Number(plan.entry)) / Math.max(1e-9, Number(plan.entry));
+      const slTol = Math.abs(Number(row.sl) - Number(plan.sl)) / Math.max(1e-9, Number(plan.entry));
+      const tpTol = Math.abs(Number(row.tp2) - Number(plan.tp2)) / Math.max(1e-9, Number(plan.entry));
+      return sameCandle && entryTol <= 0.0025 && slTol <= 0.004 && tpTol <= 0.006;
     },
     add(plan, execution, source = 'AUTO') {
       if (!plan || plan.manualActive) return;
       const rows = this.read();
       const id = this.makeId(plan);
-      if (rows.some(r => r.id === id)) return;
+      const duplicate = rows.find(r => r.id === id || this.isSameSignal(r, plan));
+      if (duplicate) {
+        duplicate.lastSeen = nowVN();
+        duplicate.seenCount = (duplicate.seenCount || 1) + 1;
+        duplicate.sources = Array.from(new Set([...(duplicate.sources || [duplicate.source || 'UNKNOWN']), source]));
+        duplicate.status = execution?.label || duplicate.status || 'WAIT ENTRY';
+        this.write(rows);
+        return;
+      }
       const guard = NoTradeEngine.evaluate(plan, execution);
       const ev = ScoreEngine.ev(plan, guard, execution);
       rows.push({
-        id, source,
+        id, source, sources: [source], seenCount: 1, lastSeen: nowVN(),
         time: nowVN(), timestamp: Date.now(),
         symbol: plan.symbol, tf: plan.timeframe, direction: plan.direction,
         signal: plan.signal, playbook: plan.playbook, stage: plan.stage,
@@ -1036,7 +1128,7 @@
       const price = typeof x === 'number' ? x : x?.close;
       if (Number.isFinite(price)) SignalJournalEngine.updateOpenWithPrice(this.symbol, this.timeframe, price);
     },
-    render() { ChartRenderer.render(this.candles, this.plan); setText('chartMeta', `${this.symbol} · ${this.timeframe} · ${nowVN()}`); if (!this.plan) { this.renderNoPlan(); return; } const p = this.execution?.price || this.candles.at(-1)?.close || this.plan.signalPrice; this.updateExecution(p); const ex = this.execution, guard = NoTradeEngine.evaluate(this.plan, this.execution), mgmt = TradeManagementEngine.evaluate(this.plan, this.execution); const px = (v) => this.exchangeRule ? ExchangeRules.fmtPrice(v, this.exchangeRule) : fmt(v, Math.abs(v) < 1 ? 5 : 2); setText('signalTitle', this.plan.signal); setText('signalScore', this.plan.score); setText('signalReason', this.plan.reason); $('signalCard').className = `rounded-2xl border p-4 min-h-[122px] ${this.plan.direction === 'LONG' ? 'bg-emerald-950/60 border-emerald-600' : 'bg-rose-950/60 border-rose-600'}`; setText('entry', px(this.plan.entry)); setText('sl', px(this.plan.sl)); setText('tp1', px(this.plan.tp1)); setText('tp2', px(this.plan.tp2)); setText('tp', px(this.plan.tp)); setText('rrOut', `1:${this.plan.rr}`); setText('execStatus', ex.label); $('execStatus').className = `font-bold mt-1 ${ex.cls}`; setText('entryType', this.plan.manualActive ? 'MANUAL_ACTIVE' : this.plan.entryType); setText('signalPrice', px(this.plan.signalPrice)); setText('currentPrice', px(p)); setText('entryPath', `${ex.note} · ${ex.distPct.toFixed(2)}% / ${ex.distR.toFixed(2)}R`); $('entryPath').className = `font-bold mt-1 whitespace-normal break-words ${ex.cls}`; setText('playbookOut', this.plan.playbook ? `${this.plan.playbook} · ${this.plan.playbookConfidence || '-'}%` : '-'); setText('signalStage', this.plan.stage || '-'); setText('entryZone', Number.isFinite(this.plan.entryZoneLow) ? `${px(this.plan.entryZoneLow)} – ${px(this.plan.entryZoneHigh)}` : '-'); setText('entryTiming', Number.isFinite(this.plan.entryTiming) ? `${this.plan.entryTiming}/100` : '-'); setText('entryAction', this.plan.action || '-'); setText('riskQuality', `${guard.score}/100`); $('riskQuality').className = `font-bold mt-1 ${guard.score >= 70 ? 'text-emerald-300' : guard.score >= 45 ? 'text-amber-300' : 'text-rose-300'}`; setText('noTradeGuard', guard.blocked ? guard.reasons[0] : 'OK'); $('noTradeGuard').className = `font-bold mt-1 whitespace-normal break-words ${guard.blocked ? 'text-rose-300' : 'text-emerald-300'}`; setText('tradeManagement', `${mgmt.label} · ${mgmt.note}`); setText('regimeGate', guard.regime ? `${guard.regime.recommendation} · ${guard.regime.reason}` : '-'); setText('signalTime', this.plan.createdTime); const age = Math.floor((Date.now() - this.plan.createdAt) / 1000); setText('sinceSignal', age < 60 ? `${age}s` : `${Math.floor(age / 60)}m ${age % 60}s`); setText('riskCoin', px(this.plan.risk)); setText('quickEntry', this.quickValue('entry') || '-'); setText('quickMargin', this.quickValue('margin') || '-'); setText('quickTP2', this.quickValue('tp2') || '-'); setText('quickSL', this.quickValue('sl') || '-'); setText('planNote', ex.note); setHTML('marketState', `<span class="badge ${this.plan.context.marketState === 'EXPANSION' ? 'badge-good' : this.plan.context.marketState === 'EXHAUSTION' || this.plan.context.marketState === 'CHAOTIC' ? 'badge-bad' : 'badge-warn'}">${this.plan.context.marketState}</span> <span class="text-slate-400">${this.plan.context.marketAction}</span>`); setText('mtfOut', this.plan.context.mtfBias); setText('mtfDetail', this.plan.context.mtfDetail || '-'); setText('fvgOut', this.plan.context.fvg); setText('liquidityOut', this.plan.context.liquidity); setText('structureOut', this.plan.context.structure); setText('killZoneOut', MarketContext.killZone(this.candles.at(-1)?.time || null).name); setText('miniSignal', `${this.plan.signal} · ${this.plan.score} · ${ex.label}`); this.renderDailyStatus(); this.renderRisk(); ForwardLogEngine.update(this.plan, this.execution, this.candles); SignalJournalEngine.update(this.plan, this.execution, this.candles); },
+    render() { ChartRenderer.render(this.candles, this.plan); setText('chartMeta', `${this.symbol} · ${this.timeframe} · ${nowVN()}`); if (!this.plan) { this.renderNoPlan(); return; } const p = this.execution?.price || this.candles.at(-1)?.close || this.plan.signalPrice; this.updateExecution(p); const ex = this.execution, guard = NoTradeEngine.evaluate(this.plan, this.execution), mgmt = TradeManagementEngine.evaluate(this.plan, this.execution); const px = (v) => this.exchangeRule ? ExchangeRules.fmtPrice(v, this.exchangeRule) : fmt(v, Math.abs(v) < 1 ? 5 : 2); setText('signalTitle', this.plan.signal); setText('signalScore', this.plan.score); setText('signalReason', this.plan.reason); $('signalCard').className = `rounded-2xl border p-4 min-h-[122px] ${this.plan.direction === 'LONG' ? 'bg-emerald-950/60 border-emerald-600' : 'bg-rose-950/60 border-rose-600'}`; setText('entry', px(this.plan.entry)); setText('sl', px(this.plan.sl)); setText('tp1', px(this.plan.tp1)); setText('tp2', px(this.plan.tp2)); setText('tp', px(this.plan.tp)); setText('rrOut', `1:${this.plan.rr}`); setText('execStatus', ex.label); $('execStatus').className = `font-bold mt-1 ${ex.cls}`; setText('entryType', this.plan.manualActive ? 'MANUAL_ACTIVE' : this.plan.entryType); setText('signalPrice', px(this.plan.signalPrice)); setText('currentPrice', px(p)); setText('entryPath', `${ex.note} · ${ex.distPct.toFixed(2)}% / ${ex.distR.toFixed(2)}R`); $('entryPath').className = `font-bold mt-1 whitespace-normal break-words ${ex.cls}`; setText('playbookOut', this.plan.playbook ? `${this.plan.playbook} · ${this.plan.playbookConfidence || '-'}%` : '-'); setText('signalStage', this.plan.stage || '-'); setText('entryZone', Number.isFinite(this.plan.entryZoneLow) ? `${px(this.plan.entryZoneLow)} – ${px(this.plan.entryZoneHigh)}` : '-'); setText('entryTiming', Number.isFinite(this.plan.entryTiming) ? `${this.plan.entryTiming}/100` : '-'); setText('entryAction', this.plan.action || '-'); setText('riskQuality', `${guard.score}/100`); $('riskQuality').className = `font-bold mt-1 ${guard.score >= 70 ? 'text-emerald-300' : guard.score >= 45 ? 'text-amber-300' : 'text-rose-300'}`; setText('noTradeGuard', guard.blocked ? guard.reasons[0] : 'OK'); $('noTradeGuard').className = `font-bold mt-1 whitespace-normal break-words ${guard.blocked ? 'text-rose-300' : 'text-emerald-300'}`; setText('tradeManagement', `${mgmt.label} · ${mgmt.note}`); setText('regimeGate', guard.regime ? `${guard.regime.recommendation} · ${guard.regime.reason}` : '-'); setText('signalTime', this.plan.createdTime); const age = Math.floor((Date.now() - this.plan.createdAt) / 1000); setText('sinceSignal', age < 60 ? `${age}s` : `${Math.floor(age / 60)}m ${age % 60}s`); setText('riskCoin', px(this.plan.risk)); setText('quickEntry', this.quickValue('entry') || '-'); setText('quickMargin', this.quickValue('margin') || '-'); setText('quickTP2', this.quickValue('tp2') || '-'); setText('quickSL', this.quickValue('sl') || '-'); setText('planNote', `${ex.note} · ${FeedbackEngine.summary(this.plan)}`); setHTML('marketState', `<span class="badge ${this.plan.context.marketState === 'EXPANSION' ? 'badge-good' : this.plan.context.marketState === 'EXHAUSTION' || this.plan.context.marketState === 'CHAOTIC' ? 'badge-bad' : 'badge-warn'}">${this.plan.context.marketState}</span> <span class="text-slate-400">${this.plan.context.marketAction}</span>`); setText('mtfOut', this.plan.context.mtfBias); setText('mtfDetail', this.plan.context.mtfDetail || '-'); setText('fvgOut', this.plan.context.fvg); setText('liquidityOut', this.plan.context.liquidity); setText('structureOut', this.plan.context.structure); setText('killZoneOut', MarketContext.killZone(this.candles.at(-1)?.time || null).name); setText('miniSignal', `${this.plan.signal} · ${this.plan.score} · ${ex.label}`); this.renderDailyStatus(); this.renderRisk(); ForwardLogEngine.update(this.plan, this.execution, this.candles); SignalJournalEngine.update(this.plan, this.execution, this.candles); },
     renderNoPlan() { ['entry','sl','tp1','tp2','tp','rrOut','quickEntry','quickMargin','quickTP2','quickSL','execStatus','entryType','signalPrice','currentPrice','entryPath','playbookOut','signalStage','entryZone','entryTiming','entryAction','riskQuality','noTradeGuard','tradeManagement','regimeGate','signalTime','sinceSignal','riskCoin','planNote','marketState','mtfOut','mtfDetail','fvgOut','liquidityOut','structureOut','killZoneOut','marginOut','riskOut','posOut','qtyOut','sizingMode','netRROut'].forEach(id => setText(id, '-')); setText('signalTitle', 'WAIT'); setText('signalScore', '0'); setText('signalReason', 'Không có setup đủ chất lượng hoặc market không phù hợp.'); setText('miniSignal', 'Chưa có tín hiệu'); $('signalCard').className = 'rounded-2xl border border-slate-700 bg-slate-950 p-4 min-h-[122px]'; },
     renderExecutionOnly() { if (!this.plan || !this.execution) return; const p = this.execution.price || this.plan.signalPrice, ex = this.execution, guard = NoTradeEngine.evaluate(this.plan, this.execution), mgmt = TradeManagementEngine.evaluate(this.plan, this.execution); const px = (v) => this.exchangeRule ? ExchangeRules.fmtPrice(v, this.exchangeRule) : fmt(v, Math.abs(v) < 1 ? 5 : 2); setText('execStatus', ex.label); $('execStatus').className = `font-bold mt-1 ${ex.cls}`; setText('currentPrice', px(p)); setText('entryPath', `${ex.note} · ${ex.distPct.toFixed(2)}% / ${ex.distR.toFixed(2)}R`); $('entryPath').className = `font-bold mt-1 whitespace-normal break-words ${ex.cls}`; setText('playbookOut', this.plan.playbook ? `${this.plan.playbook} · ${this.plan.playbookConfidence || '-'}%` : '-'); setText('signalStage', this.plan.stage || '-'); setText('entryZone', Number.isFinite(this.plan.entryZoneLow) ? `${px(this.plan.entryZoneLow)} – ${px(this.plan.entryZoneHigh)}` : '-'); setText('entryTiming', Number.isFinite(this.plan.entryTiming) ? `${this.plan.entryTiming}/100` : '-'); setText('entryAction', this.plan.action || '-'); setText('riskQuality', `${guard.score}/100`); setText('noTradeGuard', guard.blocked ? guard.reasons[0] : 'OK'); setText('tradeManagement', `${mgmt.label} · ${mgmt.note}`); const age = Math.floor((Date.now() - this.plan.createdAt) / 1000); setText('sinceSignal', age < 60 ? `${age}s` : `${Math.floor(age / 60)}m ${age % 60}s`); setText('planNote', ex.note); setText('miniSignal', `${this.plan.signal} · ${this.plan.score} · ${ex.label}`); this.renderDailyStatus(); ForwardLogEngine.update(this.plan, this.execution, this.candles); SignalJournalEngine.update(this.plan, this.execution, this.candles); this.renderRisk(); this.renderForwardLog(); },
     renderRisk() {
@@ -1162,7 +1254,7 @@
             const exec = ExecutionEngine.update(plan, ExecutionEngine.init(plan), candles.at(-1)?.close);
             const guard = NoTradeEngine.evaluate(plan, exec);
             const evScore = ScoreEngine.ev(plan, guard, exec);
-            return { symbol: x.symbol, signal: guard.blocked ? 'NO TRADE' : plan.signal, q: evScore, exec: exec.label, setup: plan.setupType, why: `Lite · ${plan.rank} · ${plan.stage || '-'} · EV ${evScore} · RiskQ ${guard.score}`, plan, exec, guard, evScore, candles };
+            return { symbol: x.symbol, signal: guard.blocked ? 'NO TRADE' : plan.signal, q: evScore, exec: exec.label, setup: plan.setupType, why: `Lite · ${plan.rank} · ${plan.stage || '-'} · EV ${evScore} · RiskQ ${guard.score} · ${FeedbackEngine.summary(plan)}`, plan, exec, guard, evScore, candles };
           } catch (err) {
             return { symbol: x.symbol, signal: 'ERR', q: 0, exec: 'ERR', setup: '-', why: err?.message || 'Lỗi lite scan', plan: null, exec: null, guard: null, evScore: 0, candles: [] };
           }
@@ -1184,7 +1276,7 @@
             const exec = ExecutionEngine.update(plan, ExecutionEngine.init(plan), r.candles.at(-1)?.close);
             const guard = NoTradeEngine.evaluate(plan, exec);
             const evScore = ScoreEngine.ev(plan, guard, exec);
-            return { ...r, signal: guard.blocked ? 'NO TRADE' : plan.signal, q: evScore, exec: exec.label, setup: plan.setupType, why: `${plan.rank} · ${plan.stage || '-'} · EV ${evScore} · RiskQ ${guard.score} · ${guard.blocked ? guard.reasons[0] : 'OK'}`, plan, exec, guard, evScore };
+            return { ...r, signal: guard.blocked ? 'NO TRADE' : plan.signal, q: evScore, exec: exec.label, setup: plan.setupType, why: `${plan.rank} · ${plan.stage || '-'} · EV ${evScore} · RiskQ ${guard.score} · ${guard.blocked ? guard.reasons[0] : 'OK'} · ${FeedbackEngine.summary(plan)}`, plan, exec, guard, evScore };
           } catch (err) {
             return { ...r, signal: 'ERR', q: 0, exec: 'ERR', why: err?.message || 'Lỗi deep scan', guard: null, evScore: 0 };
           }
