@@ -191,7 +191,7 @@
               <label>Risk %<input id="riskPct" type="number" value="3" class="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2"></label>
               <label>Phí %<input id="feePct" type="number" step="0.01" value="0.05" class="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2"></label>
               <label>Trượt giá %<input id="slippagePct" type="number" step="0.01" value="0.03" class="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2"></label>
-              <label>Đòn bẩy<select id="leverage" class="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2"><option value="3">x3</option><option value="5" selected>x5</option><option value="10">x10</option><option value="20">x20</option></select></label>
+              <label>Đòn bẩy<select id="leverage" class="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2"><option value="3">x3</option><option value="5" selected>x5</option><option value="10">x10</option><option value="20">x20</option><option value="30">x30</option><option value="40">x40</option></select></label>
               <label>Vốn vào lệnh<select id="marginMode" class="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2"><option value="auto" selected>Auto Risk%</option><option value="5">5 USDT</option><option value="10">10 USDT</option><option value="20">20 USDT</option></select></label>
               <div class="box p-2"><div class="text-slate-500">Margin</div><div id="marginOut" class="mono font-bold">-</div></div>
               <div class="box p-2"><div class="text-slate-500">Risk</div><div id="riskOut" class="mono font-bold">-</div></div>
@@ -613,7 +613,10 @@
       if (state?.raw) state = state.raw; if (!state || state.planId !== plan.id) state = this.init(plan);
       const raw = typeof candleOrPrice === 'number' ? { high: candleOrPrice, low: candleOrPrice, close: candleOrPrice, time: null, isTick: true } : candleOrPrice;
       const sameSignalCandle = raw?.time && raw.time === plan.signalCandleTime && !raw.isTick;
-      const p = sameSignalCandle ? { high: raw.close, low: raw.close, close: raw.close, time: raw.time } : raw;
+      const crossedEntryOnSignalCandle = sameSignalCandle && (plan.direction === 'LONG' ? raw.low <= plan.entry : raw.high >= plan.entry);
+      // Nếu check lại cùng cây nến signal mà nến đã từng chạm entry, ưu tiên công nhận ENTRY trước.
+      // Nếu chưa từng chạm entry thì chỉ dùng close để tránh wick trước thời điểm signal gây false fill.
+      const p = sameSignalCandle && !crossedEntryOnSignalCandle ? { high: raw.close, low: raw.close, close: raw.close, time: raw.time } : raw;
       if (!p) return this.view(plan, state, plan.signalPrice);
       const high = Math.max(p.high, p.close), low = Math.min(p.low, p.close), price = p.close, isLong = plan.direction === 'LONG';
       if (state.state === 'STALE_PLAN' && !plan.manualActive) return this.view(plan, state, price);
@@ -1010,7 +1013,8 @@
         duplicate.lastSeen = nowVN();
         duplicate.seenCount = (duplicate.seenCount || 1) + 1;
         duplicate.sources = Array.from(new Set([...(duplicate.sources || [duplicate.source || 'UNKNOWN']), source]));
-        duplicate.status = execution?.label || duplicate.status || 'WAIT ENTRY';
+        // Không overwrite status/outcome bằng execution hiện tại, vì execution có thể chỉ nhìn giá hiện tại
+        // và kết luận STALE sai khi entry đã từng khớp trong khoảng giữa hai lần check.
         this.write(rows);
         return;
       }
@@ -1036,8 +1040,11 @@
     },
     update(plan, execution, candles = []) {
       if (!plan || plan.manualActive) return;
-      this.updateOpenWithPrice(plan.symbol, plan.timeframe, execution?.price ?? plan.signalPrice);
+      // Luôn replay candle trước rồi mới dùng current price.
+      // Tránh trường hợp current price đã qua TP khiến tool kết luận STALE,
+      // trong khi candle history cho thấy entry đã từng được chạm trước đó.
       if (candles?.length) this.updateOpenWithCandles(plan.symbol, plan.timeframe, candles);
+      this.updateOpenWithPrice(plan.symbol, plan.timeframe, execution?.price ?? plan.signalPrice);
     },
     maxWaitBars(tf) {
       return { '5m': 12, '15m': 8, '30m': 6, '1h': 4 }[tf] || 8;
@@ -1112,10 +1119,12 @@
       row.barsSeen = (row.barsSeen || 0) + 1;
       if (!row.entryTouched && row.barsSeen > this.maxWaitBars(row.tf)) { this.finish(row, 'MISSED', 0, 'MISSED ENTRY'); row.lastEvalCandleTime = candle.time; return row; }
       if (!row.entryTouched) {
-        const targetPassedBeforeEntry = isLong ? high >= row.tp1 : low <= row.tp1;
-        if (targetPassedBeforeEntry) { this.finish(row, 'STALE', 0, 'STALE PLAN'); row.lastEvalCandleTime = candle.time; return row; }
         const entryHit = isLong ? low <= row.entry : high >= row.entry;
+        const targetPassedBeforeEntry = isLong ? high >= row.tp1 : low <= row.tp1;
+        // Ưu tiên entryHit trước stale. Nếu cùng một nến có cả Entry và TP,
+        // không được kết luận STALE vì có khả năng giá đã khớp Entry rồi mới đi TP.
         if (entryHit) { row.entryTouched = true; row.journalState = 'ENTRY_FILLED'; row.outcome = 'OPEN'; row.status = 'ENTRY_FILLED'; }
+        else if (targetPassedBeforeEntry) { this.finish(row, 'STALE', 0, 'STALE PLAN'); row.lastEvalCandleTime = candle.time; return row; }
       }
       if (row.entryTouched) {
         this.updateMfeMae(row, high, low);
@@ -1233,7 +1242,24 @@
       }
     },
     async getMtfBias() { if (Date.now() - this.mtfAt < CONFIG.MTF_TTL_MS && this.mtfCache?.symbol === this.symbol) return this.mtfCache; try { const engine = await MarketContext.mtfEngine(this.symbol); this.mtfCache = { symbol: this.symbol, bias: engine.alignment, engine }; this.mtfAt = Date.now(); return this.mtfCache; } catch(e) { return { symbol: this.symbol, bias: 'OFF', engine: null }; } },
-    async analyze(isAuto = false) { try { this.symbol = $('symbol').value; this.timeframe = $('timeframe').value; this.strategy = $('strategy').value; this.rr = +$('rr').value; this.candles = await BinanceAPI.klines(this.symbol, this.timeframe, CONFIG.CANDLE_LIMIT); this.exchangeRule = await this.getExchangeRule(this.symbol); const mtf = await this.getMtfBias(); const fresh = TradePlanEngine.create({ symbol: this.symbol, timeframe: this.timeframe, strategy: this.strategy, rr: this.rr, candles: this.candles, mtfBias: mtf.bias, mtfEngine: mtf.engine }); if (!isAuto || !this.plan || ExecutionEngine.terminal(this.execution)) { this.plan = fresh; this.execution = this.plan ? ExecutionEngine.init(this.plan) : null; } this.updateExecution(this.candles.at(-1)?.close); ForwardLogEngine.add(this.plan, this.execution); SignalJournalEngine.add(this.plan, this.execution, isAuto ? 'AUTO' : 'ANALYZE'); SignalJournalEngine.updateOpenWithCandles(this.symbol, this.timeframe, this.candles); this.render(); this.renderForwardLog(); if (this.auto) this.ensureSockets(); } catch(e) { console.error(e); setText('signalReason', `Lỗi phân tích: ${e.message}`); } },
+    async analyze(isAuto = false) { try { this.symbol = $('symbol').value; this.timeframe = $('timeframe').value; this.strategy = $('strategy').value; this.rr = +$('rr').value; this.candles = await BinanceAPI.klines(this.symbol, this.timeframe, CONFIG.CANDLE_LIMIT); this.exchangeRule = await this.getExchangeRule(this.symbol); const mtf = await this.getMtfBias(); const fresh = TradePlanEngine.create({ symbol: this.symbol, timeframe: this.timeframe, strategy: this.strategy, rr: this.rr, candles: this.candles, mtfBias: mtf.bias, mtfEngine: mtf.engine }); if (!isAuto || !this.plan || ExecutionEngine.terminal(this.execution)) { this.plan = fresh; this.execution = this.plan ? ExecutionEngine.init(this.plan) : null; } this.updateExecution(this.candles.at(-1)?.close); ForwardLogEngine.add(this.plan, this.execution); SignalJournalEngine.add(this.plan, this.execution, isAuto ? 'AUTO' : 'ANALYZE'); SignalJournalEngine.updateOpenWithCandles(this.symbol, this.timeframe, this.candles); this.rebuildExecutionFromJournal(); this.render(); this.renderForwardLog(); if (this.auto) this.ensureSockets(); } catch(e) { console.error(e); setText('signalReason', `Lỗi phân tích: ${e.message}`); } },
+    rebuildExecutionFromJournal() {
+      if (!this.plan) return;
+      const row = SignalJournalEngine.findForPlan(this.plan);
+      if (!row) return;
+      const state = ExecutionEngine.init(this.plan);
+      state.entryTouched = !!row.entryTouched || ['OPEN','TP1_HIT','TP2_DONE','SL_HIT'].includes(row.outcome);
+      state.tp1Touched = !!row.tp1Touched || ['TP1_HIT','TP2_DONE'].includes(row.outcome);
+      state.tp2Touched = row.outcome === 'TP2_DONE';
+      state.invalidated = row.outcome === 'SL_HIT';
+      if (row.outcome === 'TP2_DONE') state.state = 'TP2_DONE';
+      else if (row.outcome === 'TP1_HIT') state.state = 'TP1_HIT';
+      else if (row.outcome === 'SL_HIT') state.state = 'INVALIDATED';
+      else if (row.outcome === 'STALE') state.state = 'STALE_PLAN';
+      else if (state.entryTouched) state.state = 'ENTRY_FILLED';
+      else state.state = 'WAIT_ENTRY';
+      this.execution = ExecutionEngine.view(this.plan, state, row.currentPrice || this.candles.at(-1)?.close || this.plan.signalPrice);
+    },
     updateExecution(x) {
       if (!this.plan) return;
       this.execution = ExecutionEngine.update(this.plan, this.execution, x);
@@ -1583,6 +1609,9 @@
     console.assert(journalRow.entryTouched === true && journalRow.outcome === 'OPEN', 'journal must track virtual entry independently from manual user entry');
     SignalJournalEngine.evalCandle(journalRow, {time:3, high:111, low:100, close:110});
     console.assert(journalRow.outcome === 'TP2_DONE' && journalRow.resultR === 2, 'journal must resolve TP/SL from planned signal levels');
+    const shortRow = { symbol:'TSTUSDT', tf:'15m', direction:'SHORT', entry:100, sl:105, tp1:95, tp2:90, rr:2, signalCandleTime:1, outcome:'WAIT_ENTRY', entryTouched:false, barsSeen:0 };
+    SignalJournalEngine.evalCandle(shortRow, {time:2, high:101, low:94, close:95});
+    console.assert(shortRow.entryTouched === true && shortRow.outcome !== 'STALE', 'journal must not mark stale if same candle touched entry before/with target');
     console.info(`Dino Futures Tool ${APP_VERSION} self-tests completed`);
   }
 
