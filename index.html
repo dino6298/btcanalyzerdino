@@ -891,7 +891,7 @@
         console.error('Supabase safe push error', e);
         this.setStatus(`Cloud push lỗi: ${e.message || e}`, false);
       }
-    }
+    },
     async pull() {
       const client = this.getClient();
       if (!client) { this.setStatus('Cloud SDK lỗi', false); return; }
@@ -1782,6 +1782,8 @@
     const oldSignalRow = { symbol:'TSTUSDT', tf:'15m', direction:'LONG', playbook:'Trend Pullback', signalCandleTime:1000, entry:100, sl:95, tp2:110 };
     const samePlanLater = { symbol:'TSTUSDT', timeframe:'15m', direction:'LONG', playbook:'Trend Pullback', signalCandleTime:1000 + 900 * 3, entry:100.1, sl:95.1, tp2:110.2 };
     console.assert(SignalJournalEngine.isSameSignal(oldSignalRow, samePlanLater), 'same setup re-analyze must not create a new journal signal or change signal time');
+    const mergedRows = CloudSyncEngine.mergeRows([{ id:'A', lastSeen:'2', v:2 }], [{ id:'A', lastSeen:'1', v:1 }, { id:'B', lastSeen:'1', v:1 }]);
+    console.assert(mergedRows.length === 2 && mergedRows.find(x => x.id === 'A')?.v === 2, 'cloud safe push must merge rows without duplicating or losing newer local data');
     console.info(`Dino Futures Tool ${APP_VERSION} self-tests completed`);
   }
 
