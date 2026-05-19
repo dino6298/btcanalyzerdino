@@ -6,6 +6,7 @@
   <title>Dino Futures Tool V3 Official · dino98</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root { color-scheme: dark; }
     body { background:#020617; color:#e2e8f0; }
@@ -58,6 +59,10 @@
           <option value="debug">Debug Mode</option>
         </select>
         <span id="dailyStatusTop" class="rounded-full bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-slate-300">Daily: -</span>
+        <input id="syncId" value="dino98-main" class="w-32 rounded-full bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-slate-200" title="Sync ID dùng chung giữa máy tính và điện thoại" />
+        <button id="btnCloudPull" class="rounded-full bg-blue-950/70 hover:bg-blue-900 border border-blue-700 px-3 py-2 text-blue-200 text-xs">☁ Pull</button>
+        <button id="btnCloudPush" class="rounded-full bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-700 px-3 py-2 text-emerald-200 text-xs">☁ Push</button>
+        <span id="cloudStatus" class="rounded-full bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-slate-300">Cloud: OFF</span>
       </div>
     </section>
 
@@ -190,6 +195,23 @@
               <button id="btnCopyPrices" class="rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-2">Copy giá</button>
               <button id="btnOpenBinance" class="rounded-xl bg-yellow-500 hover:bg-yellow-400 text-slate-950 font-bold px-3 py-2">Mở Binance</button>
             </div>
+            <div class="mt-3 rounded-xl border border-cyan-800 bg-cyan-950/15 p-3">
+              <div class="flex items-center justify-between mb-2">
+                <div>
+                  <div class="font-bold">Quick Copy Binance</div>
+                  <div class="text-xs text-slate-400">Copy nhanh từng ô để nhập trên Binance, nhất là khi thao tác bằng điện thoại.</div>
+                </div>
+                <button id="btnCopyBinanceSetup" class="rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-3 py-2 text-sm">Copy Binance Setup</button>
+              </div>
+              <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                <button id="btnCopyEntryOnly" class="rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 p-2 text-left"><div class="text-slate-500">Entry</div><div id="quickEntry" class="font-bold mono">-</div></button>
+                <button id="btnCopySLOnly" class="rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 p-2 text-left"><div class="text-slate-500">SL</div><div id="quickSL" class="font-bold mono">-</div></button>
+                <button id="btnCopyTP1Only" class="rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 p-2 text-left"><div class="text-slate-500">TP1</div><div id="quickTP1" class="font-bold mono">-</div></button>
+                <button id="btnCopyTP2Only" class="rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 p-2 text-left"><div class="text-slate-500">TP2</div><div id="quickTP2" class="font-bold mono">-</div></button>
+                <button id="btnCopyQtyOnly" class="rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 p-2 text-left"><div class="text-slate-500">Qty</div><div id="quickQty" class="font-bold mono">-</div></button>
+              </div>
+              <div id="quickCopyStatus" class="text-xs text-slate-500 mt-2">Tip: bấm từng ô để copy riêng giá/qty.</div>
+            </div>
             <div class="mt-3 rounded-xl border border-emerald-800 bg-emerald-950/20 p-3">
               <div class="flex flex-wrap items-center gap-2">
                 <button id="btnConfirmEntry" class="rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-2">Tôi đã vào lệnh</button>
@@ -260,7 +282,7 @@
     </section>
 
     <section id="forwardPanel" class="panel p-3 mb-4">
-      <div class="flex items-center justify-between mb-3"><div><h2 class="font-bold">Forward Test Log</h2><p class="text-xs text-slate-400">Tự lưu tín hiệu realtime gần nhất để sau này đánh giá edge thật.</p></div><div class="flex gap-2"><button id="btnExportForward" class="rounded-xl bg-cyan-900 hover:bg-cyan-800 border border-cyan-700 px-3 py-2 text-xs text-cyan-100">Export CSV</button><button id="btnClearForward" class="rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2 text-xs">Xóa log</button></div></div>
+      <div class="flex items-center justify-between mb-3"><div><h2 class="font-bold">Forward Test Log</h2><p class="text-xs text-slate-400">Tự lưu tín hiệu realtime gần nhất để sau này đánh giá edge thật.</p></div><div class="flex gap-2"><button id="btnExportForward" class="rounded-xl bg-cyan-900 hover:bg-cyan-800 border border-cyan-700 px-3 py-2 text-xs text-cyan-100">Export CSV</button><button id="btnCopyJournalSummary" class="rounded-xl bg-emerald-900 hover:bg-emerald-800 border border-emerald-700 px-3 py-2 text-xs text-emerald-100">Copy Winrate</button><button id="btnClearForward" class="rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2 text-xs">Xóa log</button></div></div>
       <div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs mb-3">
         <div class="box p-3"><div class="text-slate-500 tip" data-tip="Số tín hiệu đã được lưu trong Forward Log.">Signals <span class="tip-i">i</span></div><div id="fwSignals" class="font-bold text-lg">-</div></div>
         <div class="box p-3"><div class="text-slate-500 tip" data-tip="Tỷ lệ tín hiệu đạt TP1/TP2 trong log đã có outcome.">Winrate <span class="tip-i">i</span></div><div id="fwWinrate" class="font-bold text-lg">-</div></div>
@@ -284,6 +306,9 @@
 
   const APP_VERSION = 'V3 Official';
   const APP_BUILD = '2026-05-16';
+  const SUPABASE_URL = 'https://ccqosgplxnoqttmshcla.supabase.co';
+  const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_acstR_wtYKobyqrt6E-_ow_UgR2Hf3i';
+  const SUPABASE_TABLE = 'dino_tool_sync';
 
   const CONFIG = {
     REST: 'https://fapi.binance.com',
@@ -675,6 +700,296 @@
     }
   };
 
+  const CloudSyncEngine = {
+    client: null,
+    getClient() {
+      if (this.client) return this.client;
+      if (!window.supabase) return null;
+      this.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+      return this.client;
+    },
+    syncId() {
+      return ($('syncId')?.value || 'dino98-main').trim() || 'dino98-main';
+    },
+    setStatus(text, ok = true) {
+      setText('cloudStatus', text);
+      const el = $('cloudStatus');
+      if (el) el.className = `rounded-full border px-3 py-2 text-xs ${ok ? 'bg-emerald-950/50 border-emerald-700 text-emerald-200' : 'bg-rose-950/70 border-rose-700 text-rose-200'}`;
+    },
+    pushTimer: null,
+    queuePush(delay = 2500) {
+      if (!this.getClient()) return;
+      clearTimeout(this.pushTimer);
+      this.setStatus('Cloud: chờ auto push...', true);
+      this.pushTimer = setTimeout(() => this.push(), delay);
+    },
+    payload() {
+      return {
+        version: APP_VERSION,
+        build: APP_BUILD,
+        settings: UserSettingsEngine.read(),
+        journal: SignalJournalEngine.read(),
+        forward: ForwardLogEngine.read(),
+        updatedAt: Date.now()
+      };
+    },
+    applyPayload(data) {
+      if (!data) return;
+      if (data.settings) {
+        UserSettingsEngine.write(data.settings);
+        UserSettingsEngine.applyToUI();
+      }
+      if (Array.isArray(data.journal)) SignalJournalEngine.write(data.journal);
+      if (Array.isArray(data.forward)) ForwardLogEngine.write(data.forward);
+      this.setStatus(`Cloud: Pulled ${nowVN()}`, true);
+    },
+    async push() {
+      const client = this.getClient();
+      if (!client) { this.setStatus('Cloud SDK lỗi', false); return; }
+      const sync_id = this.syncId();
+      try {
+        UserSettingsEngine.saveFromUI();
+        const { error } = await client.from(SUPABASE_TABLE).upsert({
+          sync_id,
+          data: this.payload(),
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'sync_id' });
+        if (error) throw error;
+        UserSettingsEngine.write({ syncId: sync_id });
+        this.setStatus(`Cloud: Pushed ${nowVN()}`, true);
+      } catch (e) {
+        console.error('Supabase push error', e);
+        this.setStatus(`Cloud push lỗi: ${e.message || e}`, false);
+      }
+    },
+    async pull() {
+      const client = this.getClient();
+      if (!client) { this.setStatus('Cloud SDK lỗi', false); return; }
+      const sync_id = this.syncId();
+      try {
+        const { data, error } = await client.from(SUPABASE_TABLE).select('data,updated_at').eq('sync_id', sync_id).maybeSingle();
+        if (error) throw error;
+        if (!data) { this.setStatus('Cloud: chưa có dữ liệu', false); return; }
+        this.applyPayload(data.data);
+        UserSettingsEngine.write({ syncId: sync_id });
+        App.renderForwardLog?.();
+        App.render?.();
+      } catch (e) {
+        console.error('Supabase pull error', e);
+        this.setStatus(`Cloud pull lỗi: ${e.message || e}`, false);
+      }
+    }
+  };
+
+  const UserSettingsEngine = {
+    key: 'dino98_user_settings_v3_official',
+    fields: ['symbol','stickySymbol','timeframe','strategy','rr','riskMode','accountSize','riskPct','feePct','slippagePct','leverage','marginMode','scannerLimit','scannerFilter','scannerMinEV','uiMode','syncId'],
+    read() { try { return JSON.parse(localStorage.getItem(this.key) || '{}'); } catch(e) { return {}; } },
+    write(data) { localStorage.setItem(this.key, JSON.stringify({ ...this.read(), ...data, updatedAt: Date.now() })); },
+    saveFromUI() {
+      const data = {};
+      this.fields.forEach(id => { const el = $(id); if (el) data[id] = el.value; });
+      data.chartHidden = document.body.classList.contains('chart-hidden');
+      this.write(data);
+      if (window.__DINO_APP_READY__) CloudSyncEngine.queuePush(4000);
+    },
+    applyToUI() {
+      const data = this.read();
+      this.fields.forEach(id => {
+        const el = $(id);
+        if (el && data[id] !== undefined) el.value = data[id];
+      });
+      if (data.chartHidden) document.body.classList.add('chart-hidden');
+      return data;
+    },
+    clear() { localStorage.removeItem(this.key); }
+  };
+
+  const SignalJournalEngine = {
+    key: 'dino98_signal_journal_v3_official',
+    read() { try { return JSON.parse(localStorage.getItem(this.key) || '[]'); } catch(e) { return []; } },
+    write(rows) { localStorage.setItem(this.key, JSON.stringify(rows.slice(-1000))); if (window.__DINO_APP_READY__) CloudSyncEngine.queuePush(); },
+    makeId(plan) {
+      if (!plan) return '';
+      const bucket = Math.floor((plan.createdAt || Date.now()) / (5 * 60 * 1000));
+      return `${plan.symbol}|${plan.timeframe}|${plan.direction}|${plan.playbook || plan.entryType}|${plan.stage}|${bucket}|${Number(plan.entry).toFixed(8)}|${Number(plan.sl).toFixed(8)}`;
+    },
+    add(plan, execution, source = 'AUTO') {
+      if (!plan || plan.manualActive) return;
+      const rows = this.read();
+      const id = this.makeId(plan);
+      if (rows.some(r => r.id === id)) return;
+      const guard = NoTradeEngine.evaluate(plan, execution);
+      const ev = ScoreEngine.ev(plan, guard, execution);
+      rows.push({
+        id, source,
+        time: nowVN(), timestamp: Date.now(),
+        symbol: plan.symbol, tf: plan.timeframe, direction: plan.direction,
+        signal: plan.signal, playbook: plan.playbook, stage: plan.stage,
+        entry: plan.entry, entryZoneLow: plan.entryZoneLow, entryZoneHigh: plan.entryZoneHigh,
+        sl: plan.sl, tp1: plan.tp1, tp2: plan.tp2, rr: plan.rr,
+        signalPrice: plan.signalPrice, entryTiming: plan.entryTiming,
+        riskQuality: guard.score, evScore: ev,
+        noTrade: guard.blocked, noTradeReason: guard.blocked ? guard.reasons[0] : 'OK',
+        status: execution?.label || 'WAIT ENTRY', outcome: 'WAIT_ENTRY', resultR: null,
+        signalCandleTime: plan.signalCandleTime, createdAt: plan.createdAt,
+        journalState: 'WAIT_ENTRY', entryTouched: false, tp1Touched: false, tp2Touched: false, invalidated: false,
+        barsSeen: 0, lastEvalCandleTime: null,
+        mfe: null, mae: null, copied: false, manual: false
+      });
+      this.write(rows);
+    },
+    update(plan, execution, candles = []) {
+      if (!plan || plan.manualActive) return;
+      this.updateOpenWithPrice(plan.symbol, plan.timeframe, execution?.price ?? plan.signalPrice);
+      if (candles?.length) this.updateOpenWithCandles(plan.symbol, plan.timeframe, candles);
+    },
+    maxWaitBars(tf) {
+      return { '5m': 12, '15m': 8, '30m': 6, '1h': 4 }[tf] || 8;
+    },
+    isResolved(row) {
+      return ['TP2_DONE','SL_HIT','STALE','MISSED'].includes(row.outcome);
+    },
+    rowRisk(row) {
+      return Math.max(1e-9, Math.abs(Number(row.entry) - Number(row.sl)));
+    },
+    signedR(row, price) {
+      const risk = this.rowRisk(row);
+      return row.direction === 'LONG' ? (price - row.entry) / risk : (row.entry - price) / risk;
+    },
+    updateMfeMae(row, priceOrHigh, maybeLow = null) {
+      const risk = this.rowRisk(row);
+      let mfe, mae;
+      if (maybeLow === null) {
+        const r = this.signedR(row, priceOrHigh);
+        mfe = r; mae = r;
+      } else if (row.direction === 'LONG') {
+        mfe = (priceOrHigh - row.entry) / risk;
+        mae = (maybeLow - row.entry) / risk;
+      } else {
+        mfe = (row.entry - maybeLow) / risk;
+        mae = (row.entry - priceOrHigh) / risk;
+      }
+      row.mfe = Math.max(Number.isFinite(row.mfe) ? row.mfe : -999, mfe);
+      row.mae = Math.min(Number.isFinite(row.mae) ? row.mae : 999, mae);
+      row.moveR = maybeLow === null ? this.signedR(row, priceOrHigh) : row.mfe;
+    },
+    finish(row, outcome, resultR, status) {
+      row.outcome = outcome;
+      row.resultR = resultR;
+      row.status = status || outcome;
+      row.lastUpdate = nowVN();
+    },
+    evalTick(row, price) {
+      if (!row || this.isResolved(row) || !Number.isFinite(price)) return row;
+      const isLong = row.direction === 'LONG';
+      if (!row.entryTouched) {
+        const targetPassedBeforeEntry = isLong ? price >= row.tp1 : price <= row.tp1;
+        if (targetPassedBeforeEntry) { this.finish(row, 'STALE', 0, 'STALE PLAN'); return row; }
+        const entryHit = isLong ? price <= row.entry : price >= row.entry;
+        if (entryHit) { row.entryTouched = true; row.journalState = 'ENTRY_FILLED'; row.outcome = 'OPEN'; row.status = 'ENTRY_FILLED'; }
+      }
+      if (row.entryTouched) {
+        this.updateMfeMae(row, price);
+        if (isLong) {
+          if (price <= row.sl) this.finish(row, 'SL_HIT', -1, 'SL HIT');
+          else if (price >= row.tp2) this.finish(row, 'TP2_DONE', row.rr || 2, 'TP2 DONE');
+          else if (price >= row.tp1) { row.tp1Touched = true; row.outcome = 'TP1_HIT'; row.resultR = 1; row.status = 'TP1 HIT'; }
+          else row.status = 'ENTRY_FILLED';
+        } else {
+          if (price >= row.sl) this.finish(row, 'SL_HIT', -1, 'SL HIT');
+          else if (price <= row.tp2) this.finish(row, 'TP2_DONE', row.rr || 2, 'TP2 DONE');
+          else if (price <= row.tp1) { row.tp1Touched = true; row.outcome = 'TP1_HIT'; row.resultR = 1; row.status = 'TP1 HIT'; }
+          else row.status = 'ENTRY_FILLED';
+        }
+      }
+      row.lastUpdate = nowVN();
+      return row;
+    },
+    evalCandle(row, candle) {
+      if (!row || !candle || this.isResolved(row)) return row;
+      if (candle.time <= (row.signalCandleTime || 0)) return row;
+      if (row.lastEvalCandleTime && candle.time <= row.lastEvalCandleTime) return row;
+      const isLong = row.direction === 'LONG';
+      const high = Number(candle.high), low = Number(candle.low), close = Number(candle.close);
+      row.barsSeen = (row.barsSeen || 0) + 1;
+      if (!row.entryTouched && row.barsSeen > this.maxWaitBars(row.tf)) { this.finish(row, 'MISSED', 0, 'MISSED ENTRY'); row.lastEvalCandleTime = candle.time; return row; }
+      if (!row.entryTouched) {
+        const targetPassedBeforeEntry = isLong ? high >= row.tp1 : low <= row.tp1;
+        if (targetPassedBeforeEntry) { this.finish(row, 'STALE', 0, 'STALE PLAN'); row.lastEvalCandleTime = candle.time; return row; }
+        const entryHit = isLong ? low <= row.entry : high >= row.entry;
+        if (entryHit) { row.entryTouched = true; row.journalState = 'ENTRY_FILLED'; row.outcome = 'OPEN'; row.status = 'ENTRY_FILLED'; }
+      }
+      if (row.entryTouched) {
+        this.updateMfeMae(row, high, low);
+        if (isLong) {
+          if (low <= row.sl) this.finish(row, 'SL_HIT', -1, 'SL HIT');
+          else if (high >= row.tp2) this.finish(row, 'TP2_DONE', row.rr || 2, 'TP2 DONE');
+          else if (high >= row.tp1) { row.tp1Touched = true; row.outcome = 'TP1_HIT'; row.resultR = 1; row.status = 'TP1 HIT'; }
+          else row.status = close > row.entry ? 'RUNNING TO TP' : 'ENTRY_FILLED';
+        } else {
+          if (high >= row.sl) this.finish(row, 'SL_HIT', -1, 'SL HIT');
+          else if (low <= row.tp2) this.finish(row, 'TP2_DONE', row.rr || 2, 'TP2 DONE');
+          else if (low <= row.tp1) { row.tp1Touched = true; row.outcome = 'TP1_HIT'; row.resultR = 1; row.status = 'TP1 HIT'; }
+          else row.status = close < row.entry ? 'RUNNING TO TP' : 'ENTRY_FILLED';
+        }
+      }
+      row.lastEvalCandleTime = candle.time;
+      row.lastUpdate = nowVN();
+      return row;
+    },
+    updateOpenWithPrice(symbol, tf, price) {
+      const rows = this.read();
+      let changed = false;
+      rows.forEach(row => {
+        if (row.symbol === symbol && row.tf === tf && !this.isResolved(row)) {
+          this.evalTick(row, Number(price));
+          changed = true;
+        }
+      });
+      if (changed) this.write(rows);
+    },
+    updateOpenWithCandles(symbol, tf, candles = []) {
+      const rows = this.read();
+      let changed = false;
+      rows.forEach(row => {
+        if (row.symbol === symbol && row.tf === tf && !this.isResolved(row)) {
+          candles.forEach(c => this.evalCandle(row, c));
+          changed = true;
+        }
+      });
+      if (changed) this.write(rows);
+    },
+    markCopied(plan) {
+      if (!plan) return;
+      const rows = this.read();
+      const id = this.makeId(plan);
+      const row = rows.find(r => r.id === id);
+      if (row) { row.copied = true; row.copiedAt = nowVN(); this.write(rows); }
+    },
+    stats() {
+      const rows = this.read();
+      const resolved = rows.filter(r => Number.isFinite(r.resultR));
+      const wins = resolved.filter(r => r.resultR > 0).length;
+      const losses = resolved.filter(r => r.resultR < 0).length;
+      const totalR = resolved.reduce((a,b)=>a+b.resultR,0);
+      const copied = rows.filter(r=>r.copied).length;
+      return { rows, resolved, wins, losses, totalR, copied, winrate: wins + losses ? wins / (wins + losses) : null, expectancy: resolved.length ? totalR / resolved.length : null };
+    },
+    summaryText() {
+      const s = this.stats();
+      return [
+        'Dino Futures Tool V3 Official · Signal Journal',
+        `Signals: ${s.rows.length}`,
+        `Resolved: ${s.resolved.length}`,
+        `Copied: ${s.copied}`,
+        `Winrate: ${s.winrate === null ? '-' : (s.winrate * 100).toFixed(1) + '%'}`,
+        `Expectancy: ${s.expectancy === null ? '-' : s.expectancy.toFixed(2) + 'R'}`,
+        `Total R: ${s.totalR.toFixed(2)}R`
+      ].join(String.fromCharCode(10));
+    }
+  };
+
   const ForwardLogEngine = { key: 'dino98_forward_log_v3', read() { try { return JSON.parse(localStorage.getItem(this.key) || '[]'); } catch (e) { return []; } }, write(rows) { localStorage.setItem(this.key, JSON.stringify(rows.slice(-250))); }, add(plan, execution) { if (!plan) return; const rows = this.read(); if (rows.some(x => x.id === plan.id)) return; const g = NoTradeEngine.evaluate(plan, execution), ev = ScoreEngine.ev(plan, g, execution); rows.push({ id: plan.id, time: nowVN(), symbol: plan.symbol, tf: plan.timeframe, signal: plan.signal, stage: plan.stage, playbook: plan.playbook, entry: plan.entry, sl: plan.sl, tp1: plan.tp1, tp2: plan.tp2, signalPrice: plan.signalPrice, entryTiming: plan.entryTiming, riskQuality: g.score, evScore: ev, status: execution?.label || '-' }); this.write(rows); }, update(plan, execution, candles = []) { if (!plan || !execution) return; const rows = this.read(), row = rows.find(x => x.id === plan.id); if (!row) return; row.lastUpdate = nowVN(); row.status = execution.label; row.currentPrice = execution.price; const signedR = plan.direction === 'LONG' ? (execution.price - plan.entry) / Math.max(1e-9, plan.risk) : (plan.entry - execution.price) / Math.max(1e-9, plan.risk); row.moveR = signedR; row.mfe = Math.max(Number.isFinite(row.mfe) ? row.mfe : -999, signedR); row.mae = Math.min(Number.isFinite(row.mae) ? row.mae : 999, signedR);
       const rawState = (execution.raw || execution).state;
       if (rawState === 'TP2_DONE') { row.outcome = 'TP2_DONE'; row.resultR = plan.rr || 2; }
@@ -694,8 +1009,8 @@
 
   const App = {
     symbol: 'BTCUSDT', timeframe: '15m', strategy: 'momentum', rr: 2, candles: [], plan: null, execution: null, priceSocket: null, klineSocket: null, restTimer: null, reconnectTimer: null, activeStreamKey: '', lastPriceRenderAt: 0, auto: false, topRows: [], scannerRows: [], scannerMtfCache: {}, mtfCache: null, mtfAt: 0, exchangeCache: {}, exchangeRule: null,
-    async init() { ChartRenderer.init(); runSelfTests(); await this.loadSymbols(); this.bind(); await this.analyze(false); this.renderForwardLog(); },
-    bind() { ['symbol','stickySymbol'].forEach(id => $(id).addEventListener('change', e => this.selectSymbol(e.target.value))); $('timeframe').addEventListener('change', () => this.resetAndAnalyze()); $('strategy').addEventListener('change', () => this.resetAndAnalyze()); $('rr').addEventListener('change', () => this.resetAndAnalyze()); $('btnAnalyze').addEventListener('click', () => this.analyze(false)); $('btnAnalyzeTop').addEventListener('click', () => this.analyze(false)); $('btnAuto').addEventListener('click', () => this.toggleAuto()); $('btnAutoTop').addEventListener('click', () => this.toggleAuto()); $('btnClearCache').addEventListener('click', e => this.clearCache(e.shiftKey)); $('btnCopyPlan').addEventListener('click', () => navigator.clipboard.writeText(this.copyPlan())); $('btnCopyPrices').addEventListener('click', () => navigator.clipboard.writeText(this.copyPrices())); $('btnOpenBinance').addEventListener('click', () => window.open(`https://www.binance.com/en/futures/${this.symbol}`, '_blank')); $('btnConfirmEntry').addEventListener('click', () => this.showManualEntryBox()); $('btnApplyManualEntry').addEventListener('click', () => this.applyManualEntry()); $('btnClearManualEntry').addEventListener('click', () => this.clearManualEntry()); $('btnToggleChart').addEventListener('click', () => this.toggleChart()); $('btnFocusMode').addEventListener('click', () => this.toggleFocusMode()); $('uiMode').addEventListener('change', () => this.setUIMode($('uiMode').value)); $('btnExportForward').addEventListener('click', () => this.exportForwardCSV()); $('scannerFilter').addEventListener('change', () => this.renderScannerRows()); $('scannerMinEV').addEventListener('input', () => this.renderScannerRows()); $('btnScan').addEventListener('click', () => this.scan()); $('btnAnalyzeBest').addEventListener('click', () => this.analyzeBest()); $('btnBacktest').addEventListener('click', () => this.backtest()); $('btnClearForward').addEventListener('click', () => { localStorage.removeItem(ForwardLogEngine.key); this.renderForwardLog(); }); ['accountSize','riskPct','feePct','slippagePct','leverage','marginMode'].forEach(id => $(id).addEventListener('input', () => this.renderRisk())); $('riskMode').addEventListener('change', () => this.render()); },
+    async init() { ChartRenderer.init(); runSelfTests(); await this.loadSymbols(); UserSettingsEngine.applyToUI(); this.symbol = $('symbol')?.value || this.symbol; this.timeframe = $('timeframe')?.value || this.timeframe; this.strategy = $('strategy')?.value || this.strategy; this.rr = +($('rr')?.value || this.rr); this.bind(); window.__DINO_APP_READY__ = true; CloudSyncEngine.setStatus('Cloud: sẵn sàng', true); await this.analyze(false); this.renderForwardLog(); },
+    bind() { ['symbol','stickySymbol'].forEach(id => $(id).addEventListener('change', e => { UserSettingsEngine.saveFromUI(); this.selectSymbol(e.target.value); })); $('timeframe').addEventListener('change', () => { UserSettingsEngine.saveFromUI(); this.resetAndAnalyze(); }); $('strategy').addEventListener('change', () => { UserSettingsEngine.saveFromUI(); this.resetAndAnalyze(); }); $('rr').addEventListener('change', () => { UserSettingsEngine.saveFromUI(); this.resetAndAnalyze(); }); $('btnAnalyze').addEventListener('click', () => this.analyze(false)); $('btnAnalyzeTop').addEventListener('click', () => this.analyze(false)); $('btnAuto').addEventListener('click', () => this.toggleAuto()); $('btnAutoTop').addEventListener('click', () => this.toggleAuto()); $('btnClearCache').addEventListener('click', e => this.clearCache(e.shiftKey)); $('btnCopyPlan').addEventListener('click', () => this.copyToClipboard(this.copyPlan(), 'Đã copy kế hoạch')); $('btnCopyPrices').addEventListener('click', () => this.copyToClipboard(this.copyPrices(), 'Đã copy giá')); $('btnCopyBinanceSetup').addEventListener('click', () => this.copyToClipboard(this.copyBinanceSetup(), 'Đã copy Binance Setup')); $('btnCopyEntryOnly').addEventListener('click', () => this.copyQuickField('entry')); $('btnCopySLOnly').addEventListener('click', () => this.copyQuickField('sl')); $('btnCopyTP1Only').addEventListener('click', () => this.copyQuickField('tp1')); $('btnCopyTP2Only').addEventListener('click', () => this.copyQuickField('tp2')); $('btnCopyQtyOnly').addEventListener('click', () => this.copyQuickField('qty')); $('btnCopyJournalSummary').addEventListener('click', () => this.copyToClipboard(SignalJournalEngine.summaryText(), 'Đã copy thống kê winrate')); $('btnOpenBinance').addEventListener('click', () => window.open(`https://www.binance.com/en/futures/${this.symbol}`, '_blank')); $('btnConfirmEntry').addEventListener('click', () => this.showManualEntryBox()); $('btnApplyManualEntry').addEventListener('click', () => this.applyManualEntry()); $('btnClearManualEntry').addEventListener('click', () => this.clearManualEntry()); $('btnToggleChart').addEventListener('click', () => this.toggleChart()); $('btnFocusMode').addEventListener('click', () => this.toggleFocusMode()); $('btnCloudPull').addEventListener('click', () => CloudSyncEngine.pull()); $('btnCloudPush').addEventListener('click', () => CloudSyncEngine.push()); $('syncId').addEventListener('change', () => { UserSettingsEngine.saveFromUI(); CloudSyncEngine.setStatus('Cloud: Sync ID đã đổi', true); }); $('uiMode').addEventListener('change', () => { UserSettingsEngine.saveFromUI(); this.setUIMode($('uiMode').value); }); $('btnExportForward').addEventListener('click', () => this.exportForwardCSV()); $('scannerFilter').addEventListener('change', () => { UserSettingsEngine.saveFromUI(); this.renderScannerRows(); }); $('scannerMinEV').addEventListener('input', () => { UserSettingsEngine.saveFromUI(); this.renderScannerRows(); }); $('scannerLimit').addEventListener('change', () => UserSettingsEngine.saveFromUI()); $('btnScan').addEventListener('click', () => this.scan()); $('btnAnalyzeBest').addEventListener('click', () => this.analyzeBest()); $('btnBacktest').addEventListener('click', () => this.backtest()); $('btnClearForward').addEventListener('click', () => { localStorage.removeItem(ForwardLogEngine.key); localStorage.removeItem(SignalJournalEngine.key); this.renderForwardLog(); }); ['accountSize','riskPct','feePct','slippagePct','leverage','marginMode'].forEach(id => $(id).addEventListener('input', () => { UserSettingsEngine.saveFromUI(); this.renderRisk(); })); $('riskMode').addEventListener('change', () => { UserSettingsEngine.saveFromUI(); this.render(); }); },
     async loadSymbols() { this.topRows = await BinanceAPI.topSymbols(CONFIG.SCANNER_LIMIT); const html = this.topRows.map((x, i) => `<option value="${x.symbol}">${i + 1}. ${x.symbol} · Vol ${(x.vol / 1e9).toFixed(2)}B · ${x.change.toFixed(2)}%</option>`).join(''); $('symbol').innerHTML = html; $('stickySymbol').innerHTML = html; this.symbol = this.topRows[0]?.symbol || 'BTCUSDT'; $('symbol').value = this.symbol; $('stickySymbol').value = this.symbol; setText('topUpdated', `Top ${CONFIG.SCANNER_LIMIT} cập nhật: ${nowVN()}`); this.setUIMode($('uiMode')?.value || 'research'); },
     async selectSymbol(symbol) { this.symbol = symbol; $('symbol').value = symbol; $('stickySymbol').value = symbol; this.resetPlan(); await this.analyze(true); this.restartSockets(); },
     resetPlan() { this.plan = null; this.execution = null; chartFit = false; lastCtx = ''; try { chart?.priceScale('right')?.applyOptions({ autoScale: true }); } catch(e){} },
@@ -715,11 +1030,16 @@
       }
     },
     async getMtfBias() { if (Date.now() - this.mtfAt < CONFIG.MTF_TTL_MS && this.mtfCache?.symbol === this.symbol) return this.mtfCache; try { const engine = await MarketContext.mtfEngine(this.symbol); this.mtfCache = { symbol: this.symbol, bias: engine.alignment, engine }; this.mtfAt = Date.now(); return this.mtfCache; } catch(e) { return { symbol: this.symbol, bias: 'OFF', engine: null }; } },
-    async analyze(isAuto = false) { try { this.symbol = $('symbol').value; this.timeframe = $('timeframe').value; this.strategy = $('strategy').value; this.rr = +$('rr').value; this.candles = await BinanceAPI.klines(this.symbol, this.timeframe, CONFIG.CANDLE_LIMIT); this.exchangeRule = await this.getExchangeRule(this.symbol); const mtf = await this.getMtfBias(); const fresh = TradePlanEngine.create({ symbol: this.symbol, timeframe: this.timeframe, strategy: this.strategy, rr: this.rr, candles: this.candles, mtfBias: mtf.bias, mtfEngine: mtf.engine }); if (!isAuto || !this.plan || ExecutionEngine.terminal(this.execution)) { this.plan = fresh; this.execution = this.plan ? ExecutionEngine.init(this.plan) : null; } this.updateExecution(this.candles.at(-1)?.close); ForwardLogEngine.add(this.plan, this.execution); this.render(); this.renderForwardLog(); if (this.auto) this.ensureSockets(); } catch(e) { console.error(e); setText('signalReason', `Lỗi phân tích: ${e.message}`); } },
-    updateExecution(x) { if (!this.plan) return; this.execution = ExecutionEngine.update(this.plan, this.execution, x); },
-    render() { ChartRenderer.render(this.candles, this.plan); setText('chartMeta', `${this.symbol} · ${this.timeframe} · ${nowVN()}`); if (!this.plan) { this.renderNoPlan(); return; } const p = this.execution?.price || this.candles.at(-1)?.close || this.plan.signalPrice; this.updateExecution(p); const ex = this.execution, guard = NoTradeEngine.evaluate(this.plan, this.execution), mgmt = TradeManagementEngine.evaluate(this.plan, this.execution); const px = (v) => this.exchangeRule ? ExchangeRules.fmtPrice(v, this.exchangeRule) : fmt(v, Math.abs(v) < 1 ? 5 : 2); setText('signalTitle', this.plan.signal); setText('signalScore', this.plan.score); setText('signalReason', this.plan.reason); $('signalCard').className = `rounded-2xl border p-4 min-h-[122px] ${this.plan.direction === 'LONG' ? 'bg-emerald-950/60 border-emerald-600' : 'bg-rose-950/60 border-rose-600'}`; setText('entry', px(this.plan.entry)); setText('sl', px(this.plan.sl)); setText('tp1', px(this.plan.tp1)); setText('tp2', px(this.plan.tp2)); setText('tp', px(this.plan.tp)); setText('rrOut', `1:${this.plan.rr}`); setText('execStatus', ex.label); $('execStatus').className = `font-bold mt-1 ${ex.cls}`; setText('entryType', this.plan.manualActive ? 'MANUAL_ACTIVE' : this.plan.entryType); setText('signalPrice', px(this.plan.signalPrice)); setText('currentPrice', px(p)); setText('entryPath', `${ex.note} · ${ex.distPct.toFixed(2)}% / ${ex.distR.toFixed(2)}R`); $('entryPath').className = `font-bold mt-1 whitespace-normal break-words ${ex.cls}`; setText('playbookOut', this.plan.playbook ? `${this.plan.playbook} · ${this.plan.playbookConfidence || '-'}%` : '-'); setText('signalStage', this.plan.stage || '-'); setText('entryZone', Number.isFinite(this.plan.entryZoneLow) ? `${px(this.plan.entryZoneLow)} – ${px(this.plan.entryZoneHigh)}` : '-'); setText('entryTiming', Number.isFinite(this.plan.entryTiming) ? `${this.plan.entryTiming}/100` : '-'); setText('entryAction', this.plan.action || '-'); setText('riskQuality', `${guard.score}/100`); $('riskQuality').className = `font-bold mt-1 ${guard.score >= 70 ? 'text-emerald-300' : guard.score >= 45 ? 'text-amber-300' : 'text-rose-300'}`; setText('noTradeGuard', guard.blocked ? guard.reasons[0] : 'OK'); $('noTradeGuard').className = `font-bold mt-1 whitespace-normal break-words ${guard.blocked ? 'text-rose-300' : 'text-emerald-300'}`; setText('tradeManagement', `${mgmt.label} · ${mgmt.note}`); setText('regimeGate', guard.regime ? `${guard.regime.recommendation} · ${guard.regime.reason}` : '-'); setText('signalTime', this.plan.createdTime); const age = Math.floor((Date.now() - this.plan.createdAt) / 1000); setText('sinceSignal', age < 60 ? `${age}s` : `${Math.floor(age / 60)}m ${age % 60}s`); setText('riskCoin', px(this.plan.risk)); setText('planNote', ex.note); setHTML('marketState', `<span class="badge ${this.plan.context.marketState === 'EXPANSION' ? 'badge-good' : this.plan.context.marketState === 'EXHAUSTION' || this.plan.context.marketState === 'CHAOTIC' ? 'badge-bad' : 'badge-warn'}">${this.plan.context.marketState}</span> <span class="text-slate-400">${this.plan.context.marketAction}</span>`); setText('mtfOut', this.plan.context.mtfBias); setText('mtfDetail', this.plan.context.mtfDetail || '-'); setText('fvgOut', this.plan.context.fvg); setText('liquidityOut', this.plan.context.liquidity); setText('structureOut', this.plan.context.structure); setText('killZoneOut', MarketContext.killZone(this.candles.at(-1)?.time || null).name); setText('miniSignal', `${this.plan.signal} · ${this.plan.score} · ${ex.label}`); this.renderDailyStatus(); this.renderRisk(); ForwardLogEngine.update(this.plan, this.execution, this.candles); },
-    renderNoPlan() { ['entry','sl','tp1','tp2','tp','rrOut','execStatus','entryType','signalPrice','currentPrice','entryPath','playbookOut','signalStage','entryZone','entryTiming','entryAction','riskQuality','noTradeGuard','tradeManagement','regimeGate','signalTime','sinceSignal','riskCoin','planNote','marketState','mtfOut','mtfDetail','fvgOut','liquidityOut','structureOut','killZoneOut','marginOut','riskOut','posOut','qtyOut','sizingMode','netRROut'].forEach(id => setText(id, '-')); setText('signalTitle', 'WAIT'); setText('signalScore', '0'); setText('signalReason', 'Không có setup đủ chất lượng hoặc market không phù hợp.'); setText('miniSignal', 'Chưa có tín hiệu'); $('signalCard').className = 'rounded-2xl border border-slate-700 bg-slate-950 p-4 min-h-[122px]'; },
-    renderExecutionOnly() { if (!this.plan || !this.execution) return; const p = this.execution.price || this.plan.signalPrice, ex = this.execution, guard = NoTradeEngine.evaluate(this.plan, this.execution), mgmt = TradeManagementEngine.evaluate(this.plan, this.execution); const px = (v) => this.exchangeRule ? ExchangeRules.fmtPrice(v, this.exchangeRule) : fmt(v, Math.abs(v) < 1 ? 5 : 2); setText('execStatus', ex.label); $('execStatus').className = `font-bold mt-1 ${ex.cls}`; setText('currentPrice', px(p)); setText('entryPath', `${ex.note} · ${ex.distPct.toFixed(2)}% / ${ex.distR.toFixed(2)}R`); $('entryPath').className = `font-bold mt-1 whitespace-normal break-words ${ex.cls}`; setText('playbookOut', this.plan.playbook ? `${this.plan.playbook} · ${this.plan.playbookConfidence || '-'}%` : '-'); setText('signalStage', this.plan.stage || '-'); setText('entryZone', Number.isFinite(this.plan.entryZoneLow) ? `${px(this.plan.entryZoneLow)} – ${px(this.plan.entryZoneHigh)}` : '-'); setText('entryTiming', Number.isFinite(this.plan.entryTiming) ? `${this.plan.entryTiming}/100` : '-'); setText('entryAction', this.plan.action || '-'); setText('riskQuality', `${guard.score}/100`); setText('noTradeGuard', guard.blocked ? guard.reasons[0] : 'OK'); setText('tradeManagement', `${mgmt.label} · ${mgmt.note}`); const age = Math.floor((Date.now() - this.plan.createdAt) / 1000); setText('sinceSignal', age < 60 ? `${age}s` : `${Math.floor(age / 60)}m ${age % 60}s`); setText('planNote', ex.note); setText('miniSignal', `${this.plan.signal} · ${this.plan.score} · ${ex.label}`); this.renderDailyStatus(); ForwardLogEngine.update(this.plan, this.execution, this.candles); this.renderRisk(); this.renderForwardLog(); },
+    async analyze(isAuto = false) { try { this.symbol = $('symbol').value; this.timeframe = $('timeframe').value; this.strategy = $('strategy').value; this.rr = +$('rr').value; this.candles = await BinanceAPI.klines(this.symbol, this.timeframe, CONFIG.CANDLE_LIMIT); this.exchangeRule = await this.getExchangeRule(this.symbol); const mtf = await this.getMtfBias(); const fresh = TradePlanEngine.create({ symbol: this.symbol, timeframe: this.timeframe, strategy: this.strategy, rr: this.rr, candles: this.candles, mtfBias: mtf.bias, mtfEngine: mtf.engine }); if (!isAuto || !this.plan || ExecutionEngine.terminal(this.execution)) { this.plan = fresh; this.execution = this.plan ? ExecutionEngine.init(this.plan) : null; } this.updateExecution(this.candles.at(-1)?.close); ForwardLogEngine.add(this.plan, this.execution); SignalJournalEngine.add(this.plan, this.execution, isAuto ? 'AUTO' : 'ANALYZE'); SignalJournalEngine.updateOpenWithCandles(this.symbol, this.timeframe, this.candles); this.render(); this.renderForwardLog(); if (this.auto) this.ensureSockets(); } catch(e) { console.error(e); setText('signalReason', `Lỗi phân tích: ${e.message}`); } },
+    updateExecution(x) {
+      if (!this.plan) return;
+      this.execution = ExecutionEngine.update(this.plan, this.execution, x);
+      const price = typeof x === 'number' ? x : x?.close;
+      if (Number.isFinite(price)) SignalJournalEngine.updateOpenWithPrice(this.symbol, this.timeframe, price);
+    },
+    render() { ChartRenderer.render(this.candles, this.plan); setText('chartMeta', `${this.symbol} · ${this.timeframe} · ${nowVN()}`); if (!this.plan) { this.renderNoPlan(); return; } const p = this.execution?.price || this.candles.at(-1)?.close || this.plan.signalPrice; this.updateExecution(p); const ex = this.execution, guard = NoTradeEngine.evaluate(this.plan, this.execution), mgmt = TradeManagementEngine.evaluate(this.plan, this.execution); const px = (v) => this.exchangeRule ? ExchangeRules.fmtPrice(v, this.exchangeRule) : fmt(v, Math.abs(v) < 1 ? 5 : 2); setText('signalTitle', this.plan.signal); setText('signalScore', this.plan.score); setText('signalReason', this.plan.reason); $('signalCard').className = `rounded-2xl border p-4 min-h-[122px] ${this.plan.direction === 'LONG' ? 'bg-emerald-950/60 border-emerald-600' : 'bg-rose-950/60 border-rose-600'}`; setText('entry', px(this.plan.entry)); setText('sl', px(this.plan.sl)); setText('tp1', px(this.plan.tp1)); setText('tp2', px(this.plan.tp2)); setText('tp', px(this.plan.tp)); setText('rrOut', `1:${this.plan.rr}`); setText('execStatus', ex.label); $('execStatus').className = `font-bold mt-1 ${ex.cls}`; setText('entryType', this.plan.manualActive ? 'MANUAL_ACTIVE' : this.plan.entryType); setText('signalPrice', px(this.plan.signalPrice)); setText('currentPrice', px(p)); setText('entryPath', `${ex.note} · ${ex.distPct.toFixed(2)}% / ${ex.distR.toFixed(2)}R`); $('entryPath').className = `font-bold mt-1 whitespace-normal break-words ${ex.cls}`; setText('playbookOut', this.plan.playbook ? `${this.plan.playbook} · ${this.plan.playbookConfidence || '-'}%` : '-'); setText('signalStage', this.plan.stage || '-'); setText('entryZone', Number.isFinite(this.plan.entryZoneLow) ? `${px(this.plan.entryZoneLow)} – ${px(this.plan.entryZoneHigh)}` : '-'); setText('entryTiming', Number.isFinite(this.plan.entryTiming) ? `${this.plan.entryTiming}/100` : '-'); setText('entryAction', this.plan.action || '-'); setText('riskQuality', `${guard.score}/100`); $('riskQuality').className = `font-bold mt-1 ${guard.score >= 70 ? 'text-emerald-300' : guard.score >= 45 ? 'text-amber-300' : 'text-rose-300'}`; setText('noTradeGuard', guard.blocked ? guard.reasons[0] : 'OK'); $('noTradeGuard').className = `font-bold mt-1 whitespace-normal break-words ${guard.blocked ? 'text-rose-300' : 'text-emerald-300'}`; setText('tradeManagement', `${mgmt.label} · ${mgmt.note}`); setText('regimeGate', guard.regime ? `${guard.regime.recommendation} · ${guard.regime.reason}` : '-'); setText('signalTime', this.plan.createdTime); const age = Math.floor((Date.now() - this.plan.createdAt) / 1000); setText('sinceSignal', age < 60 ? `${age}s` : `${Math.floor(age / 60)}m ${age % 60}s`); setText('riskCoin', px(this.plan.risk)); setText('quickEntry', this.quickValue('entry') || '-'); setText('quickSL', this.quickValue('sl') || '-'); setText('quickTP1', this.quickValue('tp1') || '-'); setText('quickTP2', this.quickValue('tp2') || '-'); setText('quickQty', this.quickValue('qty') || '-'); setText('planNote', ex.note); setHTML('marketState', `<span class="badge ${this.plan.context.marketState === 'EXPANSION' ? 'badge-good' : this.plan.context.marketState === 'EXHAUSTION' || this.plan.context.marketState === 'CHAOTIC' ? 'badge-bad' : 'badge-warn'}">${this.plan.context.marketState}</span> <span class="text-slate-400">${this.plan.context.marketAction}</span>`); setText('mtfOut', this.plan.context.mtfBias); setText('mtfDetail', this.plan.context.mtfDetail || '-'); setText('fvgOut', this.plan.context.fvg); setText('liquidityOut', this.plan.context.liquidity); setText('structureOut', this.plan.context.structure); setText('killZoneOut', MarketContext.killZone(this.candles.at(-1)?.time || null).name); setText('miniSignal', `${this.plan.signal} · ${this.plan.score} · ${ex.label}`); this.renderDailyStatus(); this.renderRisk(); ForwardLogEngine.update(this.plan, this.execution, this.candles); SignalJournalEngine.update(this.plan, this.execution, this.candles); },
+    renderNoPlan() { ['entry','sl','tp1','tp2','tp','rrOut','quickEntry','quickSL','quickTP1','quickTP2','quickQty','execStatus','entryType','signalPrice','currentPrice','entryPath','playbookOut','signalStage','entryZone','entryTiming','entryAction','riskQuality','noTradeGuard','tradeManagement','regimeGate','signalTime','sinceSignal','riskCoin','planNote','marketState','mtfOut','mtfDetail','fvgOut','liquidityOut','structureOut','killZoneOut','marginOut','riskOut','posOut','qtyOut','sizingMode','netRROut'].forEach(id => setText(id, '-')); setText('signalTitle', 'WAIT'); setText('signalScore', '0'); setText('signalReason', 'Không có setup đủ chất lượng hoặc market không phù hợp.'); setText('miniSignal', 'Chưa có tín hiệu'); $('signalCard').className = 'rounded-2xl border border-slate-700 bg-slate-950 p-4 min-h-[122px]'; },
+    renderExecutionOnly() { if (!this.plan || !this.execution) return; const p = this.execution.price || this.plan.signalPrice, ex = this.execution, guard = NoTradeEngine.evaluate(this.plan, this.execution), mgmt = TradeManagementEngine.evaluate(this.plan, this.execution); const px = (v) => this.exchangeRule ? ExchangeRules.fmtPrice(v, this.exchangeRule) : fmt(v, Math.abs(v) < 1 ? 5 : 2); setText('execStatus', ex.label); $('execStatus').className = `font-bold mt-1 ${ex.cls}`; setText('currentPrice', px(p)); setText('entryPath', `${ex.note} · ${ex.distPct.toFixed(2)}% / ${ex.distR.toFixed(2)}R`); $('entryPath').className = `font-bold mt-1 whitespace-normal break-words ${ex.cls}`; setText('playbookOut', this.plan.playbook ? `${this.plan.playbook} · ${this.plan.playbookConfidence || '-'}%` : '-'); setText('signalStage', this.plan.stage || '-'); setText('entryZone', Number.isFinite(this.plan.entryZoneLow) ? `${px(this.plan.entryZoneLow)} – ${px(this.plan.entryZoneHigh)}` : '-'); setText('entryTiming', Number.isFinite(this.plan.entryTiming) ? `${this.plan.entryTiming}/100` : '-'); setText('entryAction', this.plan.action || '-'); setText('riskQuality', `${guard.score}/100`); setText('noTradeGuard', guard.blocked ? guard.reasons[0] : 'OK'); setText('tradeManagement', `${mgmt.label} · ${mgmt.note}`); const age = Math.floor((Date.now() - this.plan.createdAt) / 1000); setText('sinceSignal', age < 60 ? `${age}s` : `${Math.floor(age / 60)}m ${age % 60}s`); setText('planNote', ex.note); setText('miniSignal', `${this.plan.signal} · ${this.plan.score} · ${ex.label}`); this.renderDailyStatus(); ForwardLogEngine.update(this.plan, this.execution, this.candles); SignalJournalEngine.update(this.plan, this.execution, this.candles); this.renderRisk(); this.renderForwardLog(); },
     renderRisk() {
       const guard = NoTradeEngine.evaluate(this.plan, this.execution), risk = RiskEngine.size(this.plan, this.execution);
       if (!risk || guard.blocked) {
@@ -751,11 +1071,60 @@
     scheduleReconnect() { if (!this.auto || this.reconnectTimer) return; this.reconnectTimer = setTimeout(() => { this.reconnectTimer = null; this.restartSockets(); }, 1500); },
     openSockets() { const sym = this.symbol.toLowerCase(), tf = this.timeframe; this.activeStreamKey = `${this.symbol}|${this.timeframe}`; this.priceSocket = new WebSocket(`${CONFIG.WS}/${sym}@aggTrade`); this.priceSocket.onmessage = ev => { try { const p = +JSON.parse(ev.data).p; if (Number.isFinite(p)) { this.updateExecution(p); const now = Date.now(); if (now - this.lastPriceRenderAt > 250) { this.lastPriceRenderAt = now; this.renderExecutionOnly(); } } } catch(e) { console.warn('price ws parse error', e); } }; this.priceSocket.onclose = () => this.scheduleReconnect(); this.priceSocket.onerror = () => { setText('autoStatus', 'Live lỗi · REST fallback'); setText('liveStatus', 'Live lỗi · REST fallback'); }; this.klineSocket = new WebSocket(`${CONFIG.WS}/${sym}@kline_${tf}`); this.klineSocket.onmessage = ev => { try { const k = JSON.parse(ev.data).k, c = { time: Math.floor(k.t / 1000), open: +k.o, high: +k.h, low: +k.l, close: +k.c, volume: +k.v }; const last = this.candles.at(-1); if (last && last.time === c.time) this.candles[this.candles.length - 1] = c; else this.candles.push(c); if (this.candles.length > CONFIG.CANDLE_LIMIT) this.candles = this.candles.slice(-CONFIG.CANDLE_LIMIT); // Realtime execution chỉ dùng giá tick/close hiện tại, không dùng high/low của cây nến đang chạy để tránh false fill TP/SL.
           this.updateExecution(c.close); ChartRenderer.render(this.candles, this.plan); this.renderExecutionOnly(); } catch(e) { console.warn('kline ws parse error', e); } }; this.klineSocket.onclose = () => this.scheduleReconnect(); this.klineSocket.onerror = () => { setText('autoStatus', 'Kline lỗi · REST fallback'); setText('liveStatus', 'Kline lỗi · REST fallback'); }; setText('autoStatus', 'Auto ON · Live Price'); setText('liveStatus', 'Auto ON · Live Price'); },
-    clearCache(hard = false) { if (!confirm(hard ? 'Hard reset toàn bộ localStorage và reload?' : 'Xóa cache/runtime state?')) return; this.resetPlan(); this.mtfCache = null; this.mtfAt = 0; this.scannerRows = []; this.scannerMtfCache = {}; localStorage.removeItem('dino98_v2_log'); localStorage.removeItem(ForwardLogEngine.key); if (hard) { localStorage.clear(); location.reload(); return; } this.analyze(true); this.renderForwardLog(); },
+    clearCache(hard = false) { if (!confirm(hard ? 'Hard reset toàn bộ localStorage và reload?' : 'Xóa cache/runtime state?')) return; this.resetPlan(); this.mtfCache = null; this.mtfAt = 0; this.scannerRows = []; this.scannerMtfCache = {}; localStorage.removeItem('dino98_v2_log'); localStorage.removeItem(ForwardLogEngine.key); localStorage.removeItem(SignalJournalEngine.key); UserSettingsEngine.clear(); if (hard) { localStorage.clear(); location.reload(); return; } this.analyze(true); this.renderForwardLog(); },
     showManualEntryBox() { if (!this.plan) { alert('Chưa có TradePlan để xác nhận vào lệnh.'); return; } $('manualEntryBox').classList.remove('hidden'); $('manualEntryPrice').value = Number.isFinite(this.execution?.price) ? this.execution.price.toFixed(4) : this.plan.entry.toFixed(4); setText('manualEntryStatus', 'Nhập giá entry thực tế rồi bấm Xác nhận entry.'); },
     applyManualEntry() { if (!this.plan) { alert('Chưa có TradePlan.'); return; } const actual = +$('manualEntryPrice').value; if (!Number.isFinite(actual) || actual <= 0) { alert('Giá entry thực tế không hợp lệ.'); return; } const old = this.plan, dir = old.direction, sl = old.sl, risk = dir === 'LONG' ? actual - sl : sl - actual; if (!Number.isFinite(risk) || risk <= 0) { alert('Entry thực tế không hợp lệ so với SL hiện tại.'); return; } const rr = old.rr || 2, tp1 = dir === 'LONG' ? actual + risk * Math.min(1, rr * 0.5) : actual - risk * Math.min(1, rr * 0.5), tp2 = dir === 'LONG' ? actual + risk * rr : actual - risk * rr; this.plan = new TradePlan({ ...old, id: `${old.id}|MANUAL|${actual.toFixed(6)}|${Date.now()}`, signal: `${dir} ACTIVE`, stage: 'MANUAL_ACTIVE', action: 'MANAGE POSITION', entry: actual, entryZoneLow: actual, entryZoneHigh: actual, tp1, tp2, tp: tp2, risk, staleAtBirth: false, manualActive: true, manualEntry: actual, manualEntryTime: Date.now(), reason: `Manual Position Mode: đã xác nhận entry thực tế ${fmt(actual)}. TP/SL tính lại theo entry thật.` }); this.execution = ExecutionEngine.init(this.plan); this.updateExecution(this.candles.at(-1)?.close || actual); setText('manualEntryStatus', `Manual active: Entry thực tế ${fmt(actual)}. Tool quản lý lệnh, không còn chờ khớp entry/stale.`); ChartRenderer.render(this.candles, this.plan); this.render(); },
     clearManualEntry() { $('manualEntryBox').classList.add('hidden'); setText('manualEntryStatus', 'Đã thoát Manual Position Mode. Bấm Phân tích để tạo plan mới nếu cần.'); this.resetPlan(); this.analyze(false); },
     async getScannerMtf(symbol) { const cached = this.scannerMtfCache[symbol]; if (cached && Date.now() - cached.at < CONFIG.MTF_TTL_MS) return cached.value; const value = await MarketContext.mtfEngine(symbol); this.scannerMtfCache[symbol] = { at: Date.now(), value }; return value; },
+    copyToClipboard(text, msg = 'Đã copy') {
+      if (!text) return;
+      navigator.clipboard.writeText(text).then(() => {
+        SignalJournalEngine.markCopied(this.plan);
+        setText('quickCopyStatus', msg);
+        this.renderForwardLog();
+      }).catch(() => {
+        setText('quickCopyStatus', 'Không copy được, hãy kiểm tra quyền clipboard của trình duyệt.');
+      });
+    },
+    quickValue(field) {
+      if (!this.plan) return '';
+      const rule = this.exchangeRule;
+      const px = (v) => rule ? ExchangeRules.fmtPrice(v, rule) : fmt(v, Math.abs(v) < 1 ? 5 : 2);
+      if (field === 'entry') return px(this.plan.entry);
+      if (field === 'sl') return px(this.plan.sl);
+      if (field === 'tp1') return px(this.plan.tp1);
+      if (field === 'tp2') return px(this.plan.tp2);
+      if (field === 'qty') {
+        const risk = RiskEngine.size(this.plan, this.execution);
+        if (!risk) return '';
+        return rule ? ExchangeRules.fmtQty(risk.qty, rule) : fmt(risk.qty, 5);
+      }
+      return '';
+    },
+    copyQuickField(field) {
+      const value = this.quickValue(field);
+      if (!value) { setText('quickCopyStatus', 'Chưa có dữ liệu để copy.'); return; }
+      this.copyToClipboard(value, `Đã copy ${field.toUpperCase()}: ${value}`);
+    },
+    copyBinanceSetup() {
+      if (!this.plan) return 'No trade plan';
+      const side = this.plan.direction === 'LONG' ? 'LONG / BUY' : 'SHORT / SELL';
+      const guard = NoTradeEngine.evaluate(this.plan, this.execution);
+      const risk = RiskEngine.size(this.plan, this.execution);
+      const lines = [];
+      if (guard.blocked) lines.push(`⚠ ${guard.reasons[0]}`);
+      lines.push(`${this.plan.symbol} · ${side}`);
+      lines.push(`Leverage: x${$('leverage').value}`);
+      lines.push(`Entry: ${this.quickValue('entry')}`);
+      lines.push(`Qty: ${risk ? this.quickValue('qty') : '-'}`);
+      lines.push(`TP1: ${this.quickValue('tp1')}`);
+      lines.push(`TP2: ${this.quickValue('tp2')}`);
+      lines.push(`SL: ${this.quickValue('sl')}`);
+      lines.push(`Playbook: ${this.plan.playbook || '-'}`);
+      lines.push(`RiskQ: ${guard.score}/100 · EV: ${ScoreEngine.ev(this.plan, guard, this.execution)}/100`);
+      lines.push(`Note: Manual execution only`);
+      return lines.join(String.fromCharCode(10));
+    },
     copyPlan() {
       if (!this.plan) return 'No trade plan';
       const guard = NoTradeEngine.evaluate(this.plan, this.execution);
@@ -869,7 +1238,7 @@
     },
 
     exportForwardCSV() {
-      const rows = ForwardLogEngine.read();
+      const rows = SignalJournalEngine.read().length ? SignalJournalEngine.read() : ForwardLogEngine.read();
       if (!rows.length) {
         alert('Chưa có Forward Log để export.');
         return;
@@ -917,7 +1286,7 @@
     },
 
     renderForwardLog() {
-      const all = ForwardLogEngine.read();
+      const all = SignalJournalEngine.read().length ? SignalJournalEngine.read() : ForwardLogEngine.read();
 
       const scoreRow = (row) => {
         if (Number.isFinite(row.resultR)) return row.resultR;
@@ -1002,6 +1371,11 @@
     console.assert(Number.isFinite(forwardRowShape.entry) && Number.isFinite(forwardRowShape.sl), 'forward log row shape must keep entry and sl as separate keys');
     const displayRule = { tickSize: 0.0001, pricePrecision: 4 };
     console.assert(ExchangeRules.fmtPrice(0.10784, displayRule) !== ExchangeRules.fmtPrice(0.11092, displayRule), 'small-price symbols must not collapse to same 2-decimal display');
+    const journalRow = { symbol:'TSTUSDT', tf:'15m', direction:'LONG', entry:100, sl:95, tp1:105, tp2:110, rr:2, signalCandleTime:1, outcome:'WAIT_ENTRY', entryTouched:false, barsSeen:0 };
+    SignalJournalEngine.evalCandle(journalRow, {time:2, high:101, low:99, close:100});
+    console.assert(journalRow.entryTouched === true && journalRow.outcome === 'OPEN', 'journal must track virtual entry independently from manual user entry');
+    SignalJournalEngine.evalCandle(journalRow, {time:3, high:111, low:100, close:110});
+    console.assert(journalRow.outcome === 'TP2_DONE' && journalRow.resultR === 2, 'journal must resolve TP/SL from planned signal levels');
     console.info(`Dino Futures Tool ${APP_VERSION} self-tests completed`);
   }
 
