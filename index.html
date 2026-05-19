@@ -306,7 +306,7 @@
 
     <section id="footer" class="text-center text-xs text-slate-500 py-4 space-y-1">
       <div class="font-semibold text-slate-400">Dino Futures Tool V3 Official</div>
-      <div>Build: 2026-05-19 · HTML-only · Manual execution only · watermark: dino98</div>
+      <div>Build: 2026-05-16 · HTML-only · Manual execution only · watermark: dino98</div>
       <div class="text-slate-600">For research, backtest, forward test and decision support. Not financial advice.</div>
     </section>
   </main>
@@ -315,7 +315,7 @@
   'use strict';
 
   const APP_VERSION = 'V3 Official';
-  const APP_BUILD = '2026-05-19';
+  const APP_BUILD = '2026-05-16';
   const SUPABASE_URL = 'https://ccqosgplxnoqttmshcla.supabase.co';
   const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_acstR_wtYKobyqrt6E-_ow_UgR2Hf3i';
   const SUPABASE_TABLE = 'dino_tool_sync';
@@ -777,6 +777,7 @@
 
   const CloudSyncEngine = {
     client: null,
+    readyForAutoPush: false,
     getClient() {
       if (this.client) return this.client;
       if (!window.supabase) return null;
@@ -793,7 +794,7 @@
     },
     pushTimer: null,
     queuePush(delay = 2500) {
-      if (!this.getClient()) return;
+      if (!window.__DINO_APP_READY__ || !this.readyForAutoPush || !this.getClient()) return;
       clearTimeout(this.pushTimer);
       this.setStatus('Cloud: chờ auto push...', true);
       this.pushTimer = setTimeout(() => this.push(), delay);
@@ -808,6 +809,31 @@
         updatedAt: Date.now()
       };
     },
+    mergeRows(localRows = [], cloudRows = []) {
+      const map = new Map();
+      const keyOf = (row) => row?.id || row?.setupKey || `${row?.symbol}|${row?.tf}|${row?.time}|${row?.entry}|${row?.sl}|${row?.tp2}`;
+      [...cloudRows, ...localRows].forEach(row => {
+        if (!row) return;
+        const key = keyOf(row);
+        const old = map.get(key);
+        if (!old) { map.set(key, row); return; }
+        const oldUpdated = old.lastUpdate || old.lastSeen || old.time || '';
+        const newUpdated = row.lastUpdate || row.lastSeen || row.time || '';
+        map.set(key, String(newUpdated) >= String(oldUpdated) ? { ...old, ...row } : { ...row, ...old });
+      });
+      return Array.from(map.values()).slice(-1000);
+    },
+    mergePayload(localPayload, cloudPayload) {
+      if (!cloudPayload) return localPayload;
+      return {
+        version: APP_VERSION,
+        build: APP_BUILD,
+        settings: { ...(cloudPayload.settings || {}), ...(localPayload.settings || {}) },
+        journal: this.mergeRows(localPayload.journal || [], cloudPayload.journal || []),
+        forward: this.mergeRows(localPayload.forward || [], cloudPayload.forward || []),
+        updatedAt: Date.now()
+      };
+    },
     applyPayload(data) {
       if (!data) return;
       if (data.settings) {
@@ -818,25 +844,54 @@
       if (Array.isArray(data.forward)) ForwardLogEngine.write(data.forward);
       this.setStatus(`Cloud: Pulled ${nowVN()}`, true);
     },
+    async startupPull() {
+      const client = this.getClient();
+      if (!client) { this.readyForAutoPush = true; this.setStatus('Cloud SDK lỗi', false); return; }
+      const sync_id = this.syncId();
+      try {
+        this.setStatus('Cloud: đang Pull trước...', true);
+        const { data, error } = await client.from(SUPABASE_TABLE).select('data,updated_at').eq('sync_id', sync_id).maybeSingle();
+        if (error) throw error;
+        if (data?.data) {
+          this.applyPayload(data.data);
+          UserSettingsEngine.write({ syncId: sync_id });
+          this.setStatus(`Cloud: Pull trước OK ${nowVN()}`, true);
+        } else {
+          this.setStatus('Cloud: chưa có dữ liệu, dùng local', true);
+        }
+      } catch (e) {
+        console.error('Startup pull error', e);
+        this.setStatus(`Cloud pull đầu lỗi: ${e.message || e}`, false);
+      } finally {
+        this.readyForAutoPush = true;
+      }
+    },
     async push() {
       const client = this.getClient();
       if (!client) { this.setStatus('Cloud SDK lỗi', false); return; }
       const sync_id = this.syncId();
       try {
         UserSettingsEngine.saveFromUI();
+        this.setStatus('Cloud: Pull trước khi Push...', true);
+        const localPayload = this.payload();
+        const { data: cloudRow, error: readError } = await client.from(SUPABASE_TABLE).select('data,updated_at').eq('sync_id', sync_id).maybeSingle();
+        if (readError) throw readError;
+        const merged = this.mergePayload(localPayload, cloudRow?.data || null);
+        if (Array.isArray(merged.journal)) SignalJournalEngine.write(merged.journal);
+        if (Array.isArray(merged.forward)) ForwardLogEngine.write(merged.forward);
+        UserSettingsEngine.write({ ...(merged.settings || {}), syncId: sync_id });
         const { error } = await client.from(SUPABASE_TABLE).upsert({
           sync_id,
-          data: this.payload(),
+          data: merged,
           updated_at: new Date().toISOString()
         }, { onConflict: 'sync_id' });
         if (error) throw error;
-        UserSettingsEngine.write({ syncId: sync_id });
-        this.setStatus(`Cloud: Pushed ${nowVN()}`, true);
+        this.setStatus(`Cloud: Safe Push OK ${nowVN()}`, true);
       } catch (e) {
-        console.error('Supabase push error', e);
+        console.error('Supabase safe push error', e);
         this.setStatus(`Cloud push lỗi: ${e.message || e}`, false);
       }
-    },
+    }
     async pull() {
       const client = this.getClient();
       if (!client) { this.setStatus('Cloud SDK lỗi', false); return; }
@@ -973,17 +1028,66 @@
     }
   };
 
+  const SignalTimeEngine = {
+    tfSeconds(tf) {
+      return { '1m': 60, '3m': 180, '5m': 300, '15m': 900, '30m': 1800, '1h': 3600, '4h': 14400 }[tf] || 900;
+    },
+    asMs(sec) { return Number(sec) * 1000; },
+    fmtSec(sec) {
+      if (!Number.isFinite(Number(sec))) return '-';
+      return new Date(Number(sec) * 1000).toLocaleString('vi-VN');
+    },
+    snapshot(plan) {
+      const tf = plan?.timeframe || '15m';
+      const tfSec = this.tfSeconds(tf);
+      const openSec = Number(plan?.signalCandleTime || Math.floor(Date.now() / 1000));
+      const closeSec = openSec + tfSec;
+      const recordedAtMs = Date.now();
+      return {
+        timeframe: tf,
+        tfSec,
+        signalCandleOpenSec: openSec,
+        signalCandleCloseSec: closeSec,
+        signalTimeSec: closeSec,
+        evalStartSec: closeSec,
+        recordedAtMs,
+        signalTimeText: this.fmtSec(closeSec),
+        recordedAtText: new Date(recordedAtMs).toLocaleString('vi-VN')
+      };
+    },
+    ensureRow(row) {
+      if (!row) return row;
+      const tfSec = this.tfSeconds(row.tf);
+      const openSec = Number(row.signalCandleOpenSec || row.originalSignalCandleTime || row.signalCandleTime || 0);
+      if (!row.signalCandleOpenSec && openSec) row.signalCandleOpenSec = openSec;
+      if (!row.signalCandleCloseSec && openSec) row.signalCandleCloseSec = openSec + tfSec;
+      if (!row.signalTimeSec && row.signalCandleCloseSec) row.signalTimeSec = row.signalCandleCloseSec;
+      if (!row.evalStartSec && row.signalTimeSec) row.evalStartSec = row.signalTimeSec;
+      if (!row.signalTimeText && row.signalTimeSec) row.signalTimeText = this.fmtSec(row.signalTimeSec);
+      return row;
+    },
+    display(row, plan = null) {
+      if (row) {
+        this.ensureRow(row);
+        return row.signalTimeText || row.time || '-';
+      }
+      if (plan) return this.snapshot(plan).signalTimeText;
+      return '-';
+    }
+  };
+
   const SignalJournalEngine = {
     key: 'dino98_signal_journal_v3_official',
     read() { try { return JSON.parse(localStorage.getItem(this.key) || '[]'); } catch(e) { return []; } },
     write(rows) { localStorage.setItem(this.key, JSON.stringify(rows.slice(-1000))); if (window.__DINO_APP_READY__) CloudSyncEngine.queuePush(); },
+    setupKey(plan) {
+      if (!plan) return '';
+      return `${plan.symbol}|${plan.timeframe}|${plan.direction}|${plan.playbook || plan.entryType}|${this.priceKey(plan.entry)}|${this.priceKey(plan.sl)}|${this.priceKey(plan.tp2)}`;
+    },
     makeId(plan) {
       if (!plan) return '';
       const candleBucket = plan.signalCandleTime || Math.floor((plan.createdAt || Date.now()) / 1000);
-      const entryKey = this.priceKey(plan.entry);
-      const slKey = this.priceKey(plan.sl);
-      const tp2Key = this.priceKey(plan.tp2);
-      return `${plan.symbol}|${plan.timeframe}|${plan.direction}|${plan.playbook || plan.entryType}|${candleBucket}|${entryKey}|${slKey}|${tp2Key}`;
+      return `${this.setupKey(plan)}|${candleBucket}`;
     },
     priceKey(price) {
       const p = Number(price);
@@ -1010,13 +1114,15 @@
       if (!plan || plan.manualActive) return;
       const rows = this.read();
       const id = this.makeId(plan);
-      const duplicate = rows.find(r => r.id === id || this.isSameSignal(r, plan));
+      const setupKey = this.setupKey(plan);
+      const duplicate = rows.find(r => r.id === id || (!this.isResolved(r) && r.setupKey === setupKey) || (!this.isResolved(r) && this.isSameSignal(r, plan)));
       if (duplicate) {
         duplicate.lastSeen = nowVN();
         duplicate.seenCount = (duplicate.seenCount || 1) + 1;
         duplicate.sources = Array.from(new Set([...(duplicate.sources || [duplicate.source || 'UNKNOWN']), source]));
         // Cực kỳ quan trọng: giữ nguyên time/signalCandleTime/createdAt đầu tiên.
         // Bấm Analyze lại chỉ là re-check cùng setup, không được đổi Signal Time và không tạo signal mới.
+        SignalTimeEngine.ensureRow(duplicate);
         duplicate.originalSignalCandleTime = duplicate.originalSignalCandleTime || duplicate.signalCandleTime;
         duplicate.recheckCandleTime = plan.signalCandleTime;
         duplicate.recheckAt = nowVN();
@@ -1025,9 +1131,11 @@
       }
       const guard = NoTradeEngine.evaluate(plan, execution);
       const ev = ScoreEngine.ev(plan, guard, execution);
+      const ts = SignalTimeEngine.snapshot(plan);
       rows.push({
-        id, source, sources: [source], seenCount: 1, lastSeen: nowVN(),
-        time: nowVN(), timestamp: Date.now(), firstSeen: nowVN(),
+        id, setupKey, source, sources: [source], seenCount: 1, lastSeen: nowVN(),
+        time: ts.signalTimeText, signalTimeText: ts.signalTimeText, firstSeen: ts.signalTimeText,
+        recordedAt: ts.recordedAtText, timestamp: ts.recordedAtMs,
         symbol: plan.symbol, tf: plan.timeframe, direction: plan.direction,
         signal: plan.signal, playbook: plan.playbook, stage: plan.stage, marketState: plan.context?.marketState || null,
         entry: plan.entry, entryZoneLow: plan.entryZoneLow, entryZoneHigh: plan.entryZoneHigh,
@@ -1036,7 +1144,10 @@
         riskQuality: guard.score, evScore: ev,
         noTrade: guard.blocked, noTradeReason: guard.blocked ? guard.reasons[0] : 'OK',
         status: execution?.label || 'WAIT ENTRY', outcome: 'WAIT_ENTRY', resultR: null,
-        signalCandleTime: plan.signalCandleTime, originalSignalCandleTime: plan.signalCandleTime, createdAt: plan.createdAt,
+        signalCandleTime: ts.signalCandleOpenSec, originalSignalCandleTime: ts.signalCandleOpenSec,
+        signalCandleOpenSec: ts.signalCandleOpenSec, signalCandleCloseSec: ts.signalCandleCloseSec,
+        signalTimeSec: ts.signalTimeSec, evalStartSec: ts.evalStartSec,
+        createdAt: plan.createdAt,
         journalState: 'WAIT_ENTRY', entryTouched: false, tp1Touched: false, tp2Touched: false, invalidated: false,
         barsSeen: 0, lastEvalCandleTime: null,
         mfe: null, mae: null, copied: false, manual: false
@@ -1117,19 +1228,24 @@
     },
     evalCandle(row, candle) {
       if (!row || !candle || this.isResolved(row)) return row;
-      if (candle.time <= (row.signalCandleTime || 0)) return row;
-      if (row.lastEvalCandleTime && candle.time <= row.lastEvalCandleTime) return row;
+      SignalTimeEngine.ensureRow(row);
+      const candleTime = Number(candle.time);
+      const evalStartSec = Number(row.evalStartSec || row.signalTimeSec || row.signalCandleCloseSec || row.signalCandleTime || 0);
+      // Forward test chỉ bắt đầu từ cây nến sau thời điểm tín hiệu được xác nhận.
+      // Không dùng high/low của cây nến tạo tín hiệu vì không biết thứ tự intrabar trước/sau signal.
+      if (candleTime < evalStartSec) return row;
+      if (row.lastEvalCandleTime && candleTime <= row.lastEvalCandleTime) return row;
       const isLong = row.direction === 'LONG';
       const high = Number(candle.high), low = Number(candle.low), close = Number(candle.close);
       row.barsSeen = (row.barsSeen || 0) + 1;
-      if (!row.entryTouched && row.barsSeen > this.maxWaitBars(row.tf)) { this.finish(row, 'MISSED', 0, 'MISSED ENTRY'); row.lastEvalCandleTime = candle.time; return row; }
+      if (!row.entryTouched && row.barsSeen > this.maxWaitBars(row.tf)) { this.finish(row, 'MISSED', 0, 'MISSED ENTRY'); row.lastEvalCandleTime = candleTime; return row; }
       if (!row.entryTouched) {
         const entryHit = isLong ? low <= row.entry : high >= row.entry;
         const targetPassedBeforeEntry = isLong ? high >= row.tp1 : low <= row.tp1;
         // Ưu tiên entryHit trước stale. Nếu cùng một nến có cả Entry và TP,
         // không được kết luận STALE vì có khả năng giá đã khớp Entry rồi mới đi TP.
         if (entryHit) { row.entryTouched = true; row.journalState = 'ENTRY_FILLED'; row.outcome = 'OPEN'; row.status = 'ENTRY_FILLED'; }
-        else if (targetPassedBeforeEntry) { this.finish(row, 'STALE', 0, 'STALE PLAN'); row.lastEvalCandleTime = candle.time; return row; }
+        else if (targetPassedBeforeEntry) { this.finish(row, 'STALE', 0, 'STALE PLAN'); row.lastEvalCandleTime = candleTime; return row; }
       }
       if (row.entryTouched) {
         this.updateMfeMae(row, high, low);
@@ -1145,7 +1261,7 @@
           else row.status = close < row.entry ? 'RUNNING TO TP' : 'ENTRY_FILLED';
         }
       }
-      row.lastEvalCandleTime = candle.time;
+      row.lastEvalCandleTime = candleTime;
       row.lastUpdate = nowVN();
       return row;
     },
@@ -1175,7 +1291,12 @@
       if (!plan) return null;
       const rows = this.read();
       const id = this.makeId(plan);
-      return rows.find(r => r.id === id || this.isSameSignal(r, plan)) || null;
+      const setupKey = this.setupKey(plan);
+      const candidates = rows.filter(r => r.id === id || r.setupKey === setupKey || this.isSameSignal(r, plan));
+      if (!candidates.length) return null;
+      const open = candidates.filter(r => !this.isResolved(r));
+      const list = open.length ? open : candidates;
+      return list.sort((a,b) => (a.timestamp || 0) - (b.timestamp || 0))[0] || null;
     },
     markCopied(plan) {
       if (!plan) return;
@@ -1226,7 +1347,7 @@
 
   const App = {
     symbol: 'BTCUSDT', timeframe: '15m', strategy: 'momentum', rr: 2, candles: [], plan: null, execution: null, priceSocket: null, klineSocket: null, restTimer: null, reconnectTimer: null, activeStreamKey: '', lastPriceRenderAt: 0, auto: false, topRows: [], scannerRows: [], scannerMtfCache: {}, mtfCache: null, mtfAt: 0, exchangeCache: {}, exchangeRule: null,
-    async init() { ChartRenderer.init(); runSelfTests(); await this.loadSymbols(); UserSettingsEngine.applyToUI(); this.symbol = $('symbol')?.value || this.symbol; this.timeframe = $('timeframe')?.value || this.timeframe; this.strategy = $('strategy')?.value || this.strategy; this.rr = +($('rr')?.value || this.rr); this.bind(); window.__DINO_APP_READY__ = true; CloudSyncEngine.setStatus('Cloud: sẵn sàng', true); await this.analyze(false); this.renderForwardLog(); setTimeout(() => this.reconcileSignalJournal(false), 1200); },
+    async init() { ChartRenderer.init(); runSelfTests(); await this.loadSymbols(); UserSettingsEngine.applyToUI(); this.bind(); window.__DINO_APP_READY__ = true; await CloudSyncEngine.startupPull(); this.symbol = $('symbol')?.value || this.symbol; this.timeframe = $('timeframe')?.value || this.timeframe; this.strategy = $('strategy')?.value || this.strategy; this.rr = +($('rr')?.value || this.rr); await this.analyze(false); this.renderForwardLog(); setTimeout(() => this.reconcileSignalJournal(false), 1200); },
     bind() { ['symbol','stickySymbol'].forEach(id => $(id).addEventListener('change', e => { UserSettingsEngine.saveFromUI(); this.selectSymbol(e.target.value); })); $('timeframe').addEventListener('change', () => { UserSettingsEngine.saveFromUI(); this.resetAndAnalyze(); }); $('strategy').addEventListener('change', () => { UserSettingsEngine.saveFromUI(); this.resetAndAnalyze(); }); $('rr').addEventListener('change', () => { UserSettingsEngine.saveFromUI(); this.resetAndAnalyze(); }); $('btnAnalyze').addEventListener('click', () => this.analyze(false)); $('btnAnalyzeTop').addEventListener('click', () => this.analyze(false)); $('btnAuto').addEventListener('click', () => this.toggleAuto()); $('btnAutoTop').addEventListener('click', () => this.toggleAuto()); $('btnClearCache').addEventListener('click', e => this.clearCache(e.shiftKey)); $('btnCopyPlan').addEventListener('click', () => this.copyToClipboard(this.copyPlan(), 'Đã copy kế hoạch')); $('btnCopyPrices').addEventListener('click', () => this.copyToClipboard(this.copyPrices(), 'Đã copy giá')); $('btnCopyBinanceSetup').addEventListener('click', () => this.copyToClipboard(this.copyBinanceSetup(), 'Đã copy Binance Setup')); $('btnCopyEntryOnly').addEventListener('click', () => this.copyQuickField('entry')); $('btnCopyMarginOnly').addEventListener('click', () => this.copyQuickField('margin')); $('btnCopyTP2Only').addEventListener('click', () => this.copyQuickField('tp2')); $('btnCopySLOnly').addEventListener('click', () => this.copyQuickField('sl')); $('btnCopyJournalSummary').addEventListener('click', () => this.copyToClipboard(SignalJournalEngine.summaryText(), 'Đã copy thống kê winrate')); $('btnOpenBinance').addEventListener('click', () => window.open(`https://www.binance.com/en/futures/${this.symbol}`, '_blank')); $('btnConfirmEntry').addEventListener('click', () => this.showManualEntryBox()); $('btnApplyManualEntry').addEventListener('click', () => this.applyManualEntry()); $('btnClearManualEntry').addEventListener('click', () => this.clearManualEntry()); $('btnToggleChart').addEventListener('click', () => this.toggleChart()); $('btnFocusMode').addEventListener('click', () => this.toggleFocusMode()); $('btnCloudPull').addEventListener('click', () => CloudSyncEngine.pull()); $('btnCloudPush').addEventListener('click', () => CloudSyncEngine.push()); $('syncId').addEventListener('change', () => { UserSettingsEngine.saveFromUI(); CloudSyncEngine.setStatus('Cloud: Sync ID đã đổi', true); }); $('uiMode').addEventListener('change', () => { UserSettingsEngine.saveFromUI(); this.setUIMode($('uiMode').value); }); $('btnReconcileLogs').addEventListener('click', () => this.reconcileSignalJournal(true)); $('btnExportForward').addEventListener('click', () => this.exportForwardCSV()); $('scannerFilter').addEventListener('change', () => { UserSettingsEngine.saveFromUI(); this.renderScannerRows(); }); $('scannerMinEV').addEventListener('input', () => { UserSettingsEngine.saveFromUI(); this.renderScannerRows(); }); $('scannerLimit').addEventListener('change', () => UserSettingsEngine.saveFromUI()); $('aplusOnly').addEventListener('change', () => { UserSettingsEngine.saveFromUI(); this.render(); }); $('btnScan').addEventListener('click', () => this.scan()); $('btnAnalyzeBest').addEventListener('click', () => this.analyzeBest()); $('btnBacktest').addEventListener('click', () => this.backtest()); $('btnClearForward').addEventListener('click', () => { localStorage.removeItem(ForwardLogEngine.key); localStorage.removeItem(SignalJournalEngine.key); this.renderForwardLog(); }); ['accountSize','riskPct','feePct','slippagePct','leverage','marginMode'].forEach(id => $(id).addEventListener('input', () => { UserSettingsEngine.saveFromUI(); this.renderRisk(); })); $('riskMode').addEventListener('change', () => { UserSettingsEngine.saveFromUI(); this.render(); }); },
     async loadSymbols() { this.topRows = await BinanceAPI.topSymbols(CONFIG.SCANNER_LIMIT); const html = this.topRows.map((x, i) => `<option value="${x.symbol}">${i + 1}. ${x.symbol} · Vol ${(x.vol / 1e9).toFixed(2)}B · ${x.change.toFixed(2)}%</option>`).join(''); $('symbol').innerHTML = html; $('stickySymbol').innerHTML = html; this.symbol = this.topRows[0]?.symbol || 'BTCUSDT'; $('symbol').value = this.symbol; $('stickySymbol').value = this.symbol; setText('topUpdated', `Top ${CONFIG.SCANNER_LIMIT} cập nhật: ${nowVN()}`); this.setUIMode($('uiMode')?.value || 'research'); },
     async selectSymbol(symbol) { this.symbol = symbol; $('symbol').value = symbol; $('stickySymbol').value = symbol; this.resetPlan(); await this.analyze(true); this.restartSockets(); },
@@ -1271,7 +1392,7 @@
       const price = typeof x === 'number' ? x : x?.close;
       if (Number.isFinite(price)) SignalJournalEngine.updateOpenWithPrice(this.symbol, this.timeframe, price);
     },
-    render() { ChartRenderer.render(this.candles, this.plan); setText('chartMeta', `${this.symbol} · ${this.timeframe} · ${nowVN()}`); if (!this.plan) { this.renderNoPlan(); return; } const p = this.execution?.price || this.candles.at(-1)?.close || this.plan.signalPrice; this.updateExecution(p); const ex = this.execution, guard = NoTradeEngine.evaluate(this.plan, this.execution), mgmt = TradeManagementEngine.evaluate(this.plan, this.execution), journalRow = SignalJournalEngine.findForPlan(this.plan), decision = TraderDecisionEngine.evaluate(this.plan, this.execution, guard); const px = (v) => this.exchangeRule ? ExchangeRules.fmtPrice(v, this.exchangeRule) : fmt(v, Math.abs(v) < 1 ? 5 : 2); setText('signalTitle', this.plan.signal); setText('signalScore', this.plan.score); setText('signalReason', this.plan.reason); const signalTimeText = journalRow?.firstSeen || journalRow?.time || nowVN(); setText('signalTime', signalTimeText); setText('decisionOut', decision.decision); $('decisionOut').className = `text-2xl font-black mt-1 ${decision.cls}`; setText('decisionReason', decision.reason); setHTML('checklistOut', decision.checklist.map(x => `<div>${x[1] ? '✓' : '✕'} ${x[0]}</div>`).join('')); setText('seenCountOut', `Seen: ${journalRow?.seenCount || 1}`); $('signalCard').className = `rounded-2xl border p-4 min-h-[122px] ${this.plan.direction === 'LONG' ? 'bg-emerald-950/60 border-emerald-600' : 'bg-rose-950/60 border-rose-600'}`; setText('entry', px(this.plan.entry)); setText('sl', px(this.plan.sl)); setText('tp1', px(this.plan.tp1)); setText('tp2', px(this.plan.tp2)); setText('tp', px(this.plan.tp)); setText('rrOut', `1:${this.plan.rr}`); setText('execStatus', ex.label); $('execStatus').className = `font-bold mt-1 ${ex.cls}`; setText('entryType', this.plan.manualActive ? 'MANUAL_ACTIVE' : this.plan.entryType); setText('signalPrice', px(this.plan.signalPrice)); setText('currentPrice', px(p)); setText('entryPath', `${ex.note} · ${ex.distPct.toFixed(2)}% / ${ex.distR.toFixed(2)}R`); $('entryPath').className = `font-bold mt-1 whitespace-normal break-words ${ex.cls}`; setText('playbookOut', this.plan.playbook ? `${this.plan.playbook} · ${this.plan.playbookConfidence || '-'}%` : '-'); setText('signalStage', this.plan.stage || '-'); setText('entryZone', Number.isFinite(this.plan.entryZoneLow) ? `${px(this.plan.entryZoneLow)} – ${px(this.plan.entryZoneHigh)}` : '-'); setText('entryTiming', Number.isFinite(this.plan.entryTiming) ? `${this.plan.entryTiming}/100` : '-'); setText('entryAction', this.plan.action || '-'); setText('riskQuality', `${guard.score}/100`); $('riskQuality').className = `font-bold mt-1 ${guard.score >= 70 ? 'text-emerald-300' : guard.score >= 45 ? 'text-amber-300' : 'text-rose-300'}`; setText('noTradeGuard', guard.blocked ? guard.reasons[0] : 'OK'); $('noTradeGuard').className = `font-bold mt-1 whitespace-normal break-words ${guard.blocked ? 'text-rose-300' : 'text-emerald-300'}`; setText('tradeManagement', `${mgmt.label} · ${mgmt.note}`); setText('regimeGate', guard.regime ? `${guard.regime.recommendation} · ${guard.regime.reason}` : '-'); setText('signalTime', this.plan.createdTime); const age = Math.floor((Date.now() - this.plan.createdAt) / 1000); setText('sinceSignal', age < 60 ? `${age}s` : `${Math.floor(age / 60)}m ${age % 60}s`); setText('riskCoin', px(this.plan.risk)); setText('quickEntry', this.quickValue('entry') || '-'); setText('quickMargin', this.quickValue('margin') || '-'); setText('quickTP2', this.quickValue('tp2') || '-'); setText('quickSL', this.quickValue('sl') || '-'); setText('planNote', `${ex.note} · ${FeedbackEngine.summary(this.plan)}`); setText('managementSimOut', TradeManagementSimEngine.simulate(this.plan, journalRow, this.execution)); setText('regimeMemoryOut', RegimeMemoryEngine.summary(this.plan)); setText('failureReasonOut', journalRow?.failureReason || FailureReasonEngine.infer(journalRow)); setText('postTradeReviewOut', journalRow?.postReview || PostTradeReviewEngine.review(journalRow)); setHTML('marketState', `<span class="badge ${this.plan.context.marketState === 'EXPANSION' ? 'badge-good' : this.plan.context.marketState === 'EXHAUSTION' || this.plan.context.marketState === 'CHAOTIC' ? 'badge-bad' : 'badge-warn'}">${this.plan.context.marketState}</span> <span class="text-slate-400">${this.plan.context.marketAction}</span>`); setText('mtfOut', this.plan.context.mtfBias); setText('mtfDetail', this.plan.context.mtfDetail || '-'); setText('fvgOut', this.plan.context.fvg); setText('liquidityOut', this.plan.context.liquidity); setText('structureOut', this.plan.context.structure); setText('killZoneOut', MarketContext.killZone(this.candles.at(-1)?.time || null).name); setText('miniSignal', `${this.plan.signal} · ${this.plan.score} · ${ex.label}`); this.renderDailyStatus(); this.renderRisk(); ForwardLogEngine.update(this.plan, this.execution, this.candles); SignalJournalEngine.update(this.plan, this.execution, this.candles); },
+    render() { ChartRenderer.render(this.candles, this.plan); setText('chartMeta', `${this.symbol} · ${this.timeframe} · ${nowVN()}`); if (!this.plan) { this.renderNoPlan(); return; } const p = this.execution?.price || this.candles.at(-1)?.close || this.plan.signalPrice; this.updateExecution(p); const ex = this.execution, guard = NoTradeEngine.evaluate(this.plan, this.execution), mgmt = TradeManagementEngine.evaluate(this.plan, this.execution), journalRow = SignalJournalEngine.findForPlan(this.plan), decision = TraderDecisionEngine.evaluate(this.plan, this.execution, guard); const px = (v) => this.exchangeRule ? ExchangeRules.fmtPrice(v, this.exchangeRule) : fmt(v, Math.abs(v) < 1 ? 5 : 2); setText('signalTitle', this.plan.signal); setText('signalScore', this.plan.score); setText('signalReason', this.plan.reason); const signalTimeText = SignalTimeEngine.display(journalRow, this.plan); setText('signalTime', signalTimeText); setText('decisionOut', decision.decision); $('decisionOut').className = `text-2xl font-black mt-1 ${decision.cls}`; setText('decisionReason', decision.reason); setHTML('checklistOut', decision.checklist.map(x => `<div>${x[1] ? '✓' : '✕'} ${x[0]}</div>`).join('')); setText('seenCountOut', `Seen: ${journalRow?.seenCount || 1}`); $('signalCard').className = `rounded-2xl border p-4 min-h-[122px] ${this.plan.direction === 'LONG' ? 'bg-emerald-950/60 border-emerald-600' : 'bg-rose-950/60 border-rose-600'}`; setText('entry', px(this.plan.entry)); setText('sl', px(this.plan.sl)); setText('tp1', px(this.plan.tp1)); setText('tp2', px(this.plan.tp2)); setText('tp', px(this.plan.tp)); setText('rrOut', `1:${this.plan.rr}`); setText('execStatus', ex.label); $('execStatus').className = `font-bold mt-1 ${ex.cls}`; setText('entryType', this.plan.manualActive ? 'MANUAL_ACTIVE' : this.plan.entryType); setText('signalPrice', px(this.plan.signalPrice)); setText('currentPrice', px(p)); setText('entryPath', `${ex.note} · ${ex.distPct.toFixed(2)}% / ${ex.distR.toFixed(2)}R`); $('entryPath').className = `font-bold mt-1 whitespace-normal break-words ${ex.cls}`; setText('playbookOut', this.plan.playbook ? `${this.plan.playbook} · ${this.plan.playbookConfidence || '-'}%` : '-'); setText('signalStage', this.plan.stage || '-'); setText('entryZone', Number.isFinite(this.plan.entryZoneLow) ? `${px(this.plan.entryZoneLow)} – ${px(this.plan.entryZoneHigh)}` : '-'); setText('entryTiming', Number.isFinite(this.plan.entryTiming) ? `${this.plan.entryTiming}/100` : '-'); setText('entryAction', this.plan.action || '-'); setText('riskQuality', `${guard.score}/100`); $('riskQuality').className = `font-bold mt-1 ${guard.score >= 70 ? 'text-emerald-300' : guard.score >= 45 ? 'text-amber-300' : 'text-rose-300'}`; setText('noTradeGuard', guard.blocked ? guard.reasons[0] : 'OK'); $('noTradeGuard').className = `font-bold mt-1 whitespace-normal break-words ${guard.blocked ? 'text-rose-300' : 'text-emerald-300'}`; setText('tradeManagement', `${mgmt.label} · ${mgmt.note}`); setText('regimeGate', guard.regime ? `${guard.regime.recommendation} · ${guard.regime.reason}` : '-'); setText('signalTime', signalTimeText); const age = Math.floor((Date.now() - this.plan.createdAt) / 1000); setText('sinceSignal', age < 60 ? `${age}s` : `${Math.floor(age / 60)}m ${age % 60}s`); setText('riskCoin', px(this.plan.risk)); setText('quickEntry', this.quickValue('entry') || '-'); setText('quickMargin', this.quickValue('margin') || '-'); setText('quickTP2', this.quickValue('tp2') || '-'); setText('quickSL', this.quickValue('sl') || '-'); setText('planNote', `${ex.note} · ${FeedbackEngine.summary(this.plan)}`); setText('managementSimOut', TradeManagementSimEngine.simulate(this.plan, journalRow, this.execution)); setText('regimeMemoryOut', RegimeMemoryEngine.summary(this.plan)); setText('failureReasonOut', journalRow?.failureReason || FailureReasonEngine.infer(journalRow)); setText('postTradeReviewOut', journalRow?.postReview || PostTradeReviewEngine.review(journalRow)); setHTML('marketState', `<span class="badge ${this.plan.context.marketState === 'EXPANSION' ? 'badge-good' : this.plan.context.marketState === 'EXHAUSTION' || this.plan.context.marketState === 'CHAOTIC' ? 'badge-bad' : 'badge-warn'}">${this.plan.context.marketState}</span> <span class="text-slate-400">${this.plan.context.marketAction}</span>`); setText('mtfOut', this.plan.context.mtfBias); setText('mtfDetail', this.plan.context.mtfDetail || '-'); setText('fvgOut', this.plan.context.fvg); setText('liquidityOut', this.plan.context.liquidity); setText('structureOut', this.plan.context.structure); setText('killZoneOut', MarketContext.killZone(this.candles.at(-1)?.time || null).name); setText('miniSignal', `${this.plan.signal} · ${this.plan.score} · ${ex.label}`); this.renderDailyStatus(); this.renderRisk(); ForwardLogEngine.update(this.plan, this.execution, this.candles); SignalJournalEngine.update(this.plan, this.execution, this.candles); },
     renderNoPlan() { ['entry','sl','tp1','tp2','tp','rrOut','quickEntry','quickMargin','quickTP2','quickSL','decisionOut','decisionReason','checklistOut','seenCountOut','managementSimOut','regimeMemoryOut','failureReasonOut','postTradeReviewOut','execStatus','entryType','signalPrice','currentPrice','entryPath','playbookOut','signalStage','entryZone','entryTiming','entryAction','riskQuality','noTradeGuard','tradeManagement','regimeGate','signalTime','sinceSignal','riskCoin','planNote','marketState','mtfOut','mtfDetail','fvgOut','liquidityOut','structureOut','killZoneOut','marginOut','riskOut','posOut','qtyOut','sizingMode','netRROut'].forEach(id => setText(id, '-')); setText('signalTitle', 'WAIT'); setText('signalScore', '0'); setText('signalReason', 'Không có setup đủ chất lượng hoặc market không phù hợp.'); setText('miniSignal', 'Chưa có tín hiệu'); $('signalCard').className = 'rounded-2xl border border-slate-700 bg-slate-950 p-4 min-h-[122px]'; },
     renderExecutionOnly() { if (!this.plan || !this.execution) return; const p = this.execution.price || this.plan.signalPrice, ex = this.execution, guard = NoTradeEngine.evaluate(this.plan, this.execution), mgmt = TradeManagementEngine.evaluate(this.plan, this.execution); const px = (v) => this.exchangeRule ? ExchangeRules.fmtPrice(v, this.exchangeRule) : fmt(v, Math.abs(v) < 1 ? 5 : 2); setText('execStatus', ex.label); $('execStatus').className = `font-bold mt-1 ${ex.cls}`; setText('currentPrice', px(p)); setText('entryPath', `${ex.note} · ${ex.distPct.toFixed(2)}% / ${ex.distR.toFixed(2)}R`); $('entryPath').className = `font-bold mt-1 whitespace-normal break-words ${ex.cls}`; setText('playbookOut', this.plan.playbook ? `${this.plan.playbook} · ${this.plan.playbookConfidence || '-'}%` : '-'); setText('signalStage', this.plan.stage || '-'); setText('entryZone', Number.isFinite(this.plan.entryZoneLow) ? `${px(this.plan.entryZoneLow)} – ${px(this.plan.entryZoneHigh)}` : '-'); setText('entryTiming', Number.isFinite(this.plan.entryTiming) ? `${this.plan.entryTiming}/100` : '-'); setText('entryAction', this.plan.action || '-'); setText('riskQuality', `${guard.score}/100`); setText('noTradeGuard', guard.blocked ? guard.reasons[0] : 'OK'); setText('tradeManagement', `${mgmt.label} · ${mgmt.note}`); const age = Math.floor((Date.now() - this.plan.createdAt) / 1000); setText('sinceSignal', age < 60 ? `${age}s` : `${Math.floor(age / 60)}m ${age % 60}s`); setText('planNote', ex.note); setText('miniSignal', `${this.plan.signal} · ${this.plan.score} · ${ex.label}`); this.renderDailyStatus(); ForwardLogEngine.update(this.plan, this.execution, this.candles); SignalJournalEngine.update(this.plan, this.execution, this.candles); this.renderRisk(); this.renderForwardLog(); },
     renderRisk() {
